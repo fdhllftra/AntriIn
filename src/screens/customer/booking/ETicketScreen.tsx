@@ -17,6 +17,7 @@ import { Card } from '../../../components/Card';
 import { Badge } from '../../../components/Badge';
 import { Colors, Typography, Spacing, Layout, Radius } from '../../../constants';
 import { formatRupiah, parseDateString, formatDateLong } from '../../../utils/format';
+import { openWhatsApp } from '../../../utils/whatsapp';
 
 type NavigationProp = NativeStackNavigationProp<BookingStackParamList, 'ETicket'>;
 type RoutePropType = RouteProp<BookingStackParamList, 'ETicket'>;
@@ -115,6 +116,19 @@ export const ETicketScreen: React.FC = () => {
         </View>
 
         <View style={styles.actions}>
+          <Button
+            title="Hubungi Admin via WhatsApp"
+            variant="secondary"
+            onPress={() =>
+              openWhatsApp(
+                `Halo AntriIn, saya ${booking.customerName}. Saya ingin konfirmasi/menanyakan booking: ${booking.id} (${booking.services
+                  .map((s) => s.name)
+                  .join(', ')}, ${formatDateLong(
+                  dateObj
+                )} ${booking.timeSlot} WIB).`
+              )
+            }
+          />
           <Button
             title="Bagikan E-Ticket"
             variant="outline"

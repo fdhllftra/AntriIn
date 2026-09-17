@@ -11,7 +11,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { UserProfile, Booking, Service, Barber, BlockedSlot } from '../types';
+import { UserProfile, Booking, Service, Barber, BlockedSlot, Review } from '../types';
 
 const COLLECTIONS = {
   users: 'users',
@@ -19,6 +19,7 @@ const COLLECTIONS = {
   services: 'services',
   barbers: 'barbers',
   blockedSlots: 'blockedSlots',
+  reviews: 'reviews',
 };
 
 export const createUserProfile = async (
@@ -137,4 +138,34 @@ export const blockSlot = async (date: string, timeSlot: string): Promise<void> =
 export const unblockSlot = async (slotId: string): Promise<void> => {
   const { deleteDoc } = await import('firebase/firestore');
   await deleteDoc(doc(db, COLLECTIONS.blockedSlots, slotId));
+};
+
+export const createReview = async (
+  review: Omit<Review, 'id' | 'createdAt'>
+): Promise<string> => {
+  const reviewRef = doc(collection(db, COLLECTIONS.reviews));
+  await setDoc(reviewRef, {
+    ...review,
+    id: reviewRef.id,
+    createdAt: Date.now(),
+  });
+  return reviewRef.id;
+};
+
+export const getReviewByBooking = async (bookingId: string): Promise<Review | null> => {
+  const q = query(
+    collection(db, COLLECTIONS.reviews),
+    where('bookingId', '==', bookingId),
+    limit(1)
+  );
+  const querySnapshot = await getDocs(q);
+  if (querySnapshot.empty) return null;
+  const docSnap = querySnapshot.docs[0];
+  return { id: docSnap.id, ...docSnap.data() } as Review;
+};
+
+export const getReviewsByBarber = async (barberId: string): Promise<Review[]> => {
+  const q = query(collection(db, COLLECTIONS.reviews), where('barberId', '==', barberId));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Review);
 };

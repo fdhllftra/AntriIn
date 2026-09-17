@@ -15,11 +15,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   getBookingsByCustomer,
   updateBookingStatus,
+  getReviewByBooking,
 } from '../../services/firestore';
 import { Booking } from '../../types';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
+import { ReviewModal } from '../../components/ReviewModal';
 import { Colors, Typography, Spacing, Layout, Radius } from '../../constants';
 import { formatRupiah, parseDateString, formatDateLong } from '../../utils/format';
 
@@ -32,6 +34,10 @@ const statusBadgeMap: Record<Booking['status'], 'warning' | 'success' | 'error'>
 export const HistoryScreen: React.FC = () => {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [reviewedBookingIds, setReviewedBookingIds] = useState<string[]>([]);
+  const [activeReviewBooking, setActiveReviewBooking] = useState<Booking | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +49,17 @@ export const HistoryScreen: React.FC = () => {
     try {
       const data = await getBookingsByCustomer(user.uid);
       setBookings(data);
+
+      const doneBookings = data.filter((b) => b.status === 'Selesai');
+      const results = await Promise.all(
+        doneBookings.map(async (b) => {
+          const review = await getReviewByBooking(b.id);
+          return review ? b.id : null;
+        })
+      );
+      setReviewedBookingIds(
+        results.filter((id): id is string => id !== null)
+      );
     } catch (err) {
       setError('Gagal memuat riwayat booking.');
       console.error(err);
@@ -155,11 +172,39 @@ export const HistoryScreen: React.FC = () => {
                     onPress={() => handleCancel(item)}
                   />
                 ) : null}
+                {item.status === 'Selesai' &&
+                !reviewedBookingIds.includes(item.id) ? (
+                  <Button
+                    title="Beri Rating Kapster"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => setActiveReviewBooking(item)}
+                  />
+                ) : null}
+                {item.status === 'Selesai' &&
+                reviewedBookingIds.includes(item.id) ? (
+                  <Text style={styles.reviewedText}>
+                    Terima kasih! Kapster telah Anda rating.
+                  </Text>
+                ) : null}
               </Card>
             );
           }}
         />
       )}
+
+      {activeReviewBooking ? (
+        <ReviewModal
+          visible
+          booking={activeReviewBooking}
+          onClose={() => setActiveReviewBooking(null)}
+          onSuccess={() => {
+            setActiveReviewBooking(null);
+            loadBookings();
+            Alert.alert('Berhasil', 'Rating Anda telah terkirim.');
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -242,6 +287,12 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     color: Colors.primaryDark,
     fontWeight: '700',
+  },
+  reviewedText: {
+    ...Typography.caption,
+    color: Colors.success,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
   },
   errorBox: {
     margin: Layout.screenPadding,

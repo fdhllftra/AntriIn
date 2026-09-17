@@ -12,11 +12,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { getServices, getBarbers } from '../../services/firestore';
+import { getServices, getBarbers, getReviewsByBarber } from '../../services/firestore';
 import { Service, Barber } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { RatingSummary } from '../../components/RatingInput';
 import { Colors, Typography, Spacing, Layout, Radius } from '../../constants';
 import { formatRupiah } from '../../utils/format';
 
@@ -25,6 +26,9 @@ export const HomeScreen: React.FC = () => {
   const { profile, user } = useAuth();
   const [services, setServices] = useState<Service[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [barberRatings, setBarberRatings] = useState<
+    Record<string, { average: number; count: number }>
+  >({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +45,23 @@ export const HomeScreen: React.FC = () => {
       ]);
       setServices(serviceData);
       setBarbers(barberData);
+
+      const ratingResults = await Promise.all(
+        barberData.map(async (barber) => {
+          const reviews = await getReviewsByBarber(barber.id);
+          const total = reviews.reduce((sum, rev) => sum + rev.rating, 0);
+          return {
+            barberId: barber.id,
+            average: reviews.length ? total / reviews.length : 0,
+            count: reviews.length,
+          };
+        })
+      );
+      const ratingMap: Record<string, { average: number; count: number }> = {};
+      ratingResults.forEach((r) => {
+        ratingMap[r.barberId] = { average: r.average, count: r.count };
+      });
+      setBarberRatings(ratingMap);
     } catch (err) {
       setError('Gagal memuat data. Periksa koneksi Anda.');
       console.error(err);
@@ -132,6 +153,14 @@ export const HomeScreen: React.FC = () => {
                 {barber.specialty ? (
                   <Text style={styles.barberSpecialty}>{barber.specialty}</Text>
                 ) : null}
+                {barberRatings[barber.id]?.count ? (
+                  <RatingSummary
+                    average={barberRatings[barber.id].average}
+                    count={barberRatings[barber.id].count}
+                  />
+                ) : (
+                  <Text style={styles.barberNoReview}>Belum ada rating</Text>
+                )}
               </View>
             ))}
             {barbers.length === 0 ? (
@@ -272,6 +301,12 @@ const styles = StyleSheet.create({
     ...Typography.small,
     color: Colors.textLight,
     textAlign: 'center',
+  },
+  barberNoReview: {
+    ...Typography.small,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginTop: 2,
   },
   serviceCard: {
     flexDirection: 'row',
