@@ -83,12 +83,12 @@ export const ConfirmationScreen: React.FC = () => {
       };
 
       // Pengingat lokal X menit sebelum jadwal (opsional, tergantung izin notifikasi).
-      const reminderScheduled = await scheduleBookingReminder(
+      const reminderStatus = await scheduleBookingReminder(
         bookingId,
         date,
         timeSlot
       );
-      if (!reminderScheduled) {
+      if (reminderStatus === 'denied') {
         Alert.alert(
           'Pengingat',
           'Booking berhasil. Aktifkan izin notifikasi untuk mendapatkan pengingat jadwal.'

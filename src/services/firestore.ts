@@ -9,9 +9,17 @@ import {
   getDocs,
   orderBy,
   limit,
+  Firestore,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { UserProfile, Booking, Service, Barber, BlockedSlot, Review } from '../types';
+
+const getDb = (): Firestore => {
+  if (!db) {
+    throw new Error('Firebase tidak dikonfigurasi. Periksa variabel .env.');
+  }
+  return db;
+};
 
 const COLLECTIONS = {
   users: 'users',
@@ -26,14 +34,14 @@ export const createUserProfile = async (
   uid: string,
   profile: Omit<UserProfile, 'uid'>
 ): Promise<void> => {
-  await setDoc(doc(db, COLLECTIONS.users, uid), {
+  await setDoc(doc(getDb(), COLLECTIONS.users, uid), {
     ...profile,
     createdAt: Date.now(),
   });
 };
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
-  const docRef = doc(db, COLLECTIONS.users, uid);
+  const docRef = doc(getDb(), COLLECTIONS.users, uid);
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) return null;
   return { uid: docSnap.id, ...docSnap.data() } as UserProfile;
@@ -43,17 +51,17 @@ export const updateUserProfile = async (
   uid: string,
   data: Partial<UserProfile>
 ): Promise<void> => {
-  await updateDoc(doc(db, COLLECTIONS.users, uid), data);
+  await updateDoc(doc(getDb(), COLLECTIONS.users, uid), data);
 };
 
 export const getServices = async (): Promise<Service[]> => {
-  const q = query(collection(db, COLLECTIONS.services), where('isActive', '==', true));
+  const q = query(collection(getDb(), COLLECTIONS.services), where('isActive', '==', true));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Service);
 };
 
 export const getBarbers = async (): Promise<Barber[]> => {
-  const q = query(collection(db, COLLECTIONS.barbers), where('isActive', '==', true));
+  const q = query(collection(getDb(), COLLECTIONS.barbers), where('isActive', '==', true));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Barber);
 };
@@ -65,7 +73,7 @@ export const createBooking = async (
   if (bookedSlots.includes(booking.timeSlot)) {
     throw new Error('SLOT_TAKEN');
   }
-  const bookingRef = doc(collection(db, COLLECTIONS.bookings));
+  const bookingRef = doc(collection(getDb(), COLLECTIONS.bookings));
   await setDoc(bookingRef, {
     ...booking,
     id: bookingRef.id,
@@ -76,7 +84,7 @@ export const createBooking = async (
 
 export const getBookingsByDate = async (date: string): Promise<Booking[]> => {
   const q = query(
-    collection(db, COLLECTIONS.bookings),
+    collection(getDb(), COLLECTIONS.bookings),
     where('date', '==', date),
     where('status', 'in', ['Menunggu', 'Selesai'])
   );
@@ -89,7 +97,7 @@ export const getBookedSlots = async (
   date: string
 ): Promise<string[]> => {
   const q = query(
-    collection(db, COLLECTIONS.bookings),
+    collection(getDb(), COLLECTIONS.bookings),
     where('barberId', '==', barberId),
     where('date', '==', date),
     where('status', 'in', ['Menunggu', 'Selesai'])
@@ -100,7 +108,7 @@ export const getBookedSlots = async (
 
 export const getBookingsByCustomer = async (customerId: string): Promise<Booking[]> => {
   const q = query(
-    collection(db, COLLECTIONS.bookings),
+    collection(getDb(), COLLECTIONS.bookings),
     where('customerId', '==', customerId),
     orderBy('createdAt', 'desc'),
     limit(50)
@@ -113,20 +121,20 @@ export const updateBookingStatus = async (
   bookingId: string,
   status: 'Menunggu' | 'Selesai' | 'Batal'
 ): Promise<void> => {
-  await updateDoc(doc(db, COLLECTIONS.bookings, bookingId), {
+  await updateDoc(doc(getDb(), COLLECTIONS.bookings, bookingId), {
     status,
     updatedAt: Date.now(),
   });
 };
 
 export const getBlockedSlots = async (date: string): Promise<BlockedSlot[]> => {
-  const q = query(collection(db, COLLECTIONS.blockedSlots), where('date', '==', date));
+  const q = query(collection(getDb(), COLLECTIONS.blockedSlots), where('date', '==', date));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as BlockedSlot);
 };
 
 export const blockSlot = async (date: string, timeSlot: string): Promise<void> => {
-  const slotRef = doc(collection(db, COLLECTIONS.blockedSlots));
+  const slotRef = doc(collection(getDb(), COLLECTIONS.blockedSlots));
   await setDoc(slotRef, {
     id: slotRef.id,
     date,
@@ -137,13 +145,13 @@ export const blockSlot = async (date: string, timeSlot: string): Promise<void> =
 
 export const unblockSlot = async (slotId: string): Promise<void> => {
   const { deleteDoc } = await import('firebase/firestore');
-  await deleteDoc(doc(db, COLLECTIONS.blockedSlots, slotId));
+  await deleteDoc(doc(getDb(), COLLECTIONS.blockedSlots, slotId));
 };
 
 export const createReview = async (
   review: Omit<Review, 'id' | 'createdAt'>
 ): Promise<string> => {
-  const reviewRef = doc(collection(db, COLLECTIONS.reviews));
+  const reviewRef = doc(collection(getDb(), COLLECTIONS.reviews));
   await setDoc(reviewRef, {
     ...review,
     id: reviewRef.id,
@@ -154,7 +162,7 @@ export const createReview = async (
 
 export const getReviewByBooking = async (bookingId: string): Promise<Review | null> => {
   const q = query(
-    collection(db, COLLECTIONS.reviews),
+    collection(getDb(), COLLECTIONS.reviews),
     where('bookingId', '==', bookingId),
     limit(1)
   );
@@ -165,7 +173,7 @@ export const getReviewByBooking = async (bookingId: string): Promise<Review | nu
 };
 
 export const getReviewsByBarber = async (barberId: string): Promise<Review[]> => {
-  const q = query(collection(db, COLLECTIONS.reviews), where('barberId', '==', barberId));
+  const q = query(collection(getDb(), COLLECTIONS.reviews), where('barberId', '==', barberId));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Review);
 };

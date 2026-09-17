@@ -23,9 +23,15 @@ import { UserProfile } from '../types';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '';
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '';
+
+const hasGoogleConfig = !!(
+  GOOGLE_WEB_CLIENT_ID ||
+  GOOGLE_ANDROID_CLIENT_ID ||
+  GOOGLE_IOS_CLIENT_ID
+);
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -48,14 +54,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: GOOGLE_WEB_CLIENT_ID,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-    scopes: ['profile', 'email'],
-  });
+  const [request, response, promptAsync] = hasGoogleConfig
+    ? Google.useIdTokenAuthRequest({
+        clientId: GOOGLE_WEB_CLIENT_ID || undefined,
+        androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
+        iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
+        scopes: ['profile', 'email'],
+      })
+    : [null, null, async (): Promise<{ type: 'cancel' }> => ({ type: 'cancel' })];
 
   useEffect(() => {
+    if (!auth) {
+      setIsLoading(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
@@ -77,10 +89,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (response?.type === 'success') {
       const { id_token } = response.params;
-      if (id_token) {
+      if (id_token && auth) {
+        const fbAuth = auth;
         setIsSigningIn(true);
         const credential = GoogleAuthProvider.credential(id_token);
-        signInWithCredential(auth, credential)
+        signInWithCredential(fbAuth, credential)
           .then(async (userCredential) => {
             const fbUser = userCredential.user;
             const existingProfile = await getUserProfile(fbUser.uid);
@@ -111,7 +124,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signInWithGoogle = async (): Promise<void> => {
     setAuthError(null);
-    if (!GOOGLE_WEB_CLIENT_ID && !GOOGLE_ANDROID_CLIENT_ID && !GOOGLE_IOS_CLIENT_ID) {
+    if (!hasGoogleConfig || !auth) {
       setAuthError(
         'Konfigurasi Google Sign-In belum lengkap. Pastikan file .env sudah diisi.'
       );
@@ -131,6 +144,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const signOut = async (): Promise<void> => {
+    if (!auth) return;
     await firebaseSignOut(auth);
     setProfile(null);
   };
