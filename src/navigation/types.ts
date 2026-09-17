@@ -1,5 +1,6 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Service, Barber, Booking } from '../types';
 
 export type RootStackParamList = {
   AuthLoading: undefined;
@@ -25,24 +26,22 @@ export type AdminTabParamList = {
 export type BookingStackParamList = {
   ServiceSelection: undefined;
   BarberSelection: {
-    selectedServices: string[];
-    totalPrice: number;
+    services: Service[];
   };
   DateTimeSelection: {
-    selectedServices: string[];
-    totalPrice: number;
-    barberId: string;
+    services: Service[];
+    barber: Barber;
   };
   Confirmation: {
-    selectedServices: string[];
-    totalPrice: number;
-    barberId: string;
+    services: Service[];
+    barber: Barber;
     date: string;
     timeSlot: string;
   };
   ETicket: {
-    bookingId: string;
+    booking: Booking;
   };
+  Home: undefined;
 };
 
 export const RootStack = createNativeStackNavigator<RootStackParamList>();

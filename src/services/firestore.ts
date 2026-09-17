@@ -57,7 +57,13 @@ export const getBarbers = async (): Promise<Barber[]> => {
   return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Barber);
 };
 
-export const createBooking = async (booking: Omit<Booking, 'id' | 'createdAt'>): Promise<string> => {
+export const createBooking = async (
+  booking: Omit<Booking, 'id' | 'createdAt'>,
+  bookedSlots: string[] = []
+): Promise<string> => {
+  if (bookedSlots.includes(booking.timeSlot)) {
+    throw new Error('SLOT_TAKEN');
+  }
   const bookingRef = doc(collection(db, COLLECTIONS.bookings));
   await setDoc(bookingRef, {
     ...booking,
@@ -75,6 +81,20 @@ export const getBookingsByDate = async (date: string): Promise<Booking[]> => {
   );
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Booking);
+};
+
+export const getBookedSlots = async (
+  barberId: string,
+  date: string
+): Promise<string[]> => {
+  const q = query(
+    collection(db, COLLECTIONS.bookings),
+    where('barberId', '==', barberId),
+    where('date', '==', date),
+    where('status', 'in', ['Menunggu', 'Selesai'])
+  );
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map((doc) => (doc.data() as Booking).timeSlot);
 };
 
 export const getBookingsByCustomer = async (customerId: string): Promise<Booking[]> => {
