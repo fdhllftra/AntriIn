@@ -29,7 +29,8 @@
     "plugins": [
       "expo-secure-store",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-notifications"
     ],
     "newArchEnabled": true
   }

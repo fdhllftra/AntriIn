@@ -18,6 +18,7 @@ import {
   blockSlot,
   unblockSlot,
 } from '../../services/firestore';
+import { cancelBookingReminder } from '../../services/notifications';
 import { Booking, BookingStatus } from '../../types';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
@@ -74,6 +75,9 @@ export const DashboardScreen: React.FC = () => {
   const handleStatusChange = async (booking: Booking, status: BookingStatus) => {
     try {
       await updateBookingStatus(booking.id, status);
+      if (status === 'Batal') {
+        cancelBookingReminder(booking.id);
+      }
       loadData(selectedDate);
     } catch (err) {
       Alert.alert('Gagal', 'Terjadi kesalahan. Silakan coba lagi.');

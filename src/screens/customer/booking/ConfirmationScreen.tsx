@@ -12,6 +12,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../../contexts/AuthContext';
 import { createBooking, getBookedSlots, getBlockedSlots } from '../../../services/firestore';
+import { scheduleBookingReminder } from '../../../services/notifications';
 import { Booking } from '../../../types';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
@@ -80,6 +81,19 @@ export const ConfirmationScreen: React.FC = () => {
         id: bookingId,
         createdAt: Date.now(),
       };
+
+      // Pengingat lokal X menit sebelum jadwal (opsional, tergantung izin notifikasi).
+      const reminderScheduled = await scheduleBookingReminder(
+        bookingId,
+        date,
+        timeSlot
+      );
+      if (!reminderScheduled) {
+        Alert.alert(
+          'Pengingat',
+          'Booking berhasil. Aktifkan izin notifikasi untuk mendapatkan pengingat jadwal.'
+        );
+      }
 
       navigation.reset({
         index: 1,

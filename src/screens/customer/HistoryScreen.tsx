@@ -17,6 +17,7 @@ import {
   updateBookingStatus,
   getReviewByBooking,
 } from '../../services/firestore';
+import { cancelBookingReminder } from '../../services/notifications';
 import { Booking } from '../../types';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
@@ -85,6 +86,7 @@ export const HistoryScreen: React.FC = () => {
           onPress: async () => {
             try {
               await updateBookingStatus(booking.id, 'Batal');
+              cancelBookingReminder(booking.id);
               loadBookings();
             } catch (err) {
               Alert.alert('Gagal', 'Terjadi kesalahan. Silakan coba lagi.');
