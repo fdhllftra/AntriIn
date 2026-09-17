@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // --- users ---
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    // --- services (katalog publik) ---
+    match /services/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- barbers ---
+    match /barbers/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- bookings ---
+    match /bookings/{id} {
+      allow read: if isOwner(resource.data.customerId) || isAdmin();
+      allow create: if signedIn()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.status == 'Menunggu';
+      allow update: if isAdmin()
+        || (isOwner(request.resource.data.customerId)
+            && request.resource.data.status == 'Batal');
+      allow delete: if false;
+    }
+
+    // --- blockedSlots ---
+    match /blockedSlots/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}
