@@ -1,0 +1,27 @@
+export const Colors = {
+  primary: '#2563EB',
+  primaryDark: '#1D4ED8',
+  primaryLight: '#93C5FD',
+  secondary: '#10B981',
+  secondaryDark: '#059669',
+  accent: '#F59E0B',
+  background: '#FFFFFF',
+  surface: '#F8FAFC',
+  surfaceVariant: '#F1F5F9',
+  text: '#1E293B',
+  textSecondary: '#64748B',
+  textLight: '#94A3B8',
+  border: '#E2E8F0',
+  error: '#EF4444',
+  errorLight: '#FEE2E2',
+  success: '#22C55E',
+  successLight: '#DCFCE7',
+  warning: '#F59E0B',
+  warningLight: '#FEF3C7',
+  white: '#FFFFFF',
+  black: '#000000',
+  grey: '#6B7280',
+  greyLight: '#F3F4F6',
+} as const;
+
+export type ColorType = typeof Colors;
