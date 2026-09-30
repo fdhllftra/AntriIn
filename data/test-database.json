@@ -1,0 +1,242 @@
+{
+  "users": [
+    {
+      "uid": "demo-customer-01",
+      "name": "Budi Santoso (Pelanggan Uji Coba)",
+      "email": "pelanggan.demo@antriin.com",
+      "phone": "081234567890",
+      "role": "customer",
+      "photoURL": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200"
+    },
+    {
+      "uid": "demo-admin-01",
+      "name": "Mas Hendra (Owner Barbershop)",
+      "email": "admin.demo@antriin.com",
+      "phone": "081298765432",
+      "role": "admin",
+      "photoURL": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200"
+    },
+    {
+      "uid": "user-cust-02",
+      "name": "Ahmad Fauzi",
+      "email": "ahmad.fauzi@gmail.com",
+      "phone": "085711223344",
+      "role": "customer"
+    },
+    {
+      "uid": "user-cust-03",
+      "name": "Deni Pratama",
+      "email": "deni.pratama@gmail.com",
+      "phone": "081377889900",
+      "role": "customer"
+    }
+  ],
+  "services": [
+    {
+      "id": "srv-gentleman-cut",
+      "name": "Gentleman Haircut",
+      "description": "Potong rambut rapi berkelas sesuai bentuk wajah + cuci bilas + styling pomade premium",
+      "price": 35000,
+      "durationMinutes": 30,
+      "isActive": true
+    },
+    {
+      "id": "srv-cut-wash-massage",
+      "name": "Haircut + Wash & Head Massage",
+      "description": "Potong rambut, keramas dengan sampo cooling, dan pijatan relaksasi kepala serta leher",
+      "price": 50000,
+      "durationMinutes": 45,
+      "isActive": true
+    },
+    {
+      "id": "srv-complete-grooming",
+      "name": "Complete Grooming Package",
+      "description": "Paket komplit: Potong rambut + cuci + shaving jenggot/kumis + masker wajah charcoal",
+      "price": 75000,
+      "durationMinutes": 60,
+      "isActive": true
+    },
+    {
+      "id": "srv-beard-trim",
+      "name": "Beard Trim & Hot Towel Shave",
+      "description": "Perawatan kumis dan jenggot presisi dengan handuk hangat dan aftershave menyegarkan",
+      "price": 25000,
+      "durationMinutes": 20,
+      "isActive": true
+    },
+    {
+      "id": "srv-kids-cut",
+      "name": "Kids Haircut",
+      "description": "Cukur rambut anak-anak ramah, sabar, dan rapi untuk usia di bawah 12 tahun",
+      "price": 30000,
+      "durationMinutes": 25,
+      "isActive": true
+    },
+    {
+      "id": "srv-hair-color",
+      "name": "Hair Coloring (Basic/Bleach)",
+      "description": "Pewarnaan rambut trendi atau highlight dengan cat rambut berkualitas tinggi",
+      "price": 120000,
+      "durationMinutes": 75,
+      "isActive": true
+    }
+  ],
+  "barbers": [
+    {
+      "id": "barber-edi",
+      "name": "Bang Edi",
+      "specialty": "Master Barber • Classic Cut & Pompadour",
+      "photoURL": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+      "isActive": true
+    },
+    {
+      "id": "barber-rizky",
+      "name": "Kang Rizky",
+      "specialty": "Fade & Taper Specialist",
+      "photoURL": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
+      "isActive": true
+    },
+    {
+      "id": "barber-yoga",
+      "name": "Mas Yoga",
+      "specialty": "Textured Crop, French Crop & Mullet",
+      "photoURL": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
+      "isActive": true
+    },
+    {
+      "id": "barber-arief",
+      "name": "Bang Arief",
+      "specialty": "Beard Sculpting & Kids Cut",
+      "photoURL": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=200",
+      "isActive": true
+    }
+  ],
+  "bookings": [
+    {
+      "id": "booking-today-01",
+      "customerId": "demo-customer-01",
+      "customerName": "Budi Santoso",
+      "customerPhone": "081234567890",
+      "relativeDays": 0,
+      "timeSlot": "14:00",
+      "barberId": "barber-edi",
+      "barberName": "Bang Edi",
+      "serviceIds": ["srv-cut-wash-massage"],
+      "totalPrice": 50000,
+      "status": "Menunggu"
+    },
+    {
+      "id": "booking-today-02",
+      "customerId": "user-cust-02",
+      "customerName": "Ahmad Fauzi",
+      "customerPhone": "085711223344",
+      "relativeDays": 0,
+      "timeSlot": "10:30",
+      "barberId": "barber-rizky",
+      "barberName": "Kang Rizky",
+      "serviceIds": ["srv-gentleman-cut"],
+      "totalPrice": 35000,
+      "status": "Selesai"
+    },
+    {
+      "id": "booking-today-03",
+      "customerId": "user-cust-03",
+      "customerName": "Deni Pratama",
+      "customerPhone": "081377889900",
+      "relativeDays": 0,
+      "timeSlot": "16:30",
+      "barberId": "barber-yoga",
+      "barberName": "Mas Yoga",
+      "serviceIds": ["srv-complete-grooming"],
+      "totalPrice": 75000,
+      "status": "Menunggu"
+    },
+    {
+      "id": "booking-tomorrow-01",
+      "customerId": "demo-customer-01",
+      "customerName": "Budi Santoso",
+      "customerPhone": "081234567890",
+      "relativeDays": 1,
+      "timeSlot": "11:00",
+      "barberId": "barber-rizky",
+      "barberName": "Kang Rizky",
+      "serviceIds": ["srv-gentleman-cut", "srv-beard-trim"],
+      "totalPrice": 60000,
+      "status": "Menunggu"
+    },
+    {
+      "id": "booking-past-01",
+      "customerId": "demo-customer-01",
+      "customerName": "Budi Santoso",
+      "customerPhone": "081234567890",
+      "relativeDays": -2,
+      "timeSlot": "15:00",
+      "barberId": "barber-edi",
+      "barberName": "Bang Edi",
+      "serviceIds": ["srv-gentleman-cut"],
+      "totalPrice": 35000,
+      "status": "Selesai"
+    },
+    {
+      "id": "booking-canceled-01",
+      "customerId": "user-cust-03",
+      "customerName": "Deni Pratama",
+      "customerPhone": "081377889900",
+      "relativeDays": -1,
+      "timeSlot": "13:00",
+      "barberId": "barber-arief",
+      "barberName": "Bang Arief",
+      "serviceIds": ["srv-gentleman-cut"],
+      "totalPrice": 35000,
+      "status": "Batal"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "review-01",
+      "bookingId": "booking-past-01",
+      "customerId": "demo-customer-01",
+      "barberId": "barber-edi",
+      "rating": 5,
+      "comment": "Potongan Bang Edi sangat rapi dan detail! Konsultasi model rambutnya juga enak."
+    },
+    {
+      "id": "review-02",
+      "bookingId": "booking-today-02",
+      "customerId": "user-cust-02",
+      "barberId": "barber-rizky",
+      "rating": 5,
+      "comment": "Fade-nya halus banget, sesuai ekspektasi. Tempatnya nyaman dan wangi."
+    },
+    {
+      "id": "review-03",
+      "bookingId": "booking-past-legacy-01",
+      "customerId": "user-cust-03",
+      "barberId": "barber-yoga",
+      "rating": 4,
+      "comment": "Cukurnya teliti, ramah dan santai. Pasti bakal balik lagi."
+    },
+    {
+      "id": "review-04",
+      "bookingId": "booking-past-legacy-02",
+      "customerId": "user-cust-02",
+      "barberId": "barber-arief",
+      "rating": 5,
+      "comment": "Cepat dan hasilnya keren, sangat cocok untuk yang buru-buru tapi mau tetap rapi."
+    }
+  ],
+  "blockedSlots": [
+    {
+      "id": "blocked-today-lunch",
+      "relativeDays": 0,
+      "timeSlot": "12:00",
+      "reason": "Istirahat Siang / Makan"
+    },
+    {
+      "id": "blocked-today-lunch-2",
+      "relativeDays": 0,
+      "timeSlot": "12:30",
+      "reason": "Istirahat Siang / Makan"
+    }
+  ]
+}

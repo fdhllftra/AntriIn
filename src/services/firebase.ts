@@ -1,5 +1,7 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+// @ts-expect-error getReactNativePersistence is only exposed in react-native entrypoint
+import { initializeAuth, getReactNativePersistence, getAuth, Auth } from 'firebase/auth';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 const readEnv = (key: string): string => process.env[key] || '';
@@ -13,11 +15,12 @@ const firebaseConfig = {
   appId: readEnv('EXPO_PUBLIC_FIREBASE_APP_ID'),
 };
 
-// Field yang wajib ada agar Firebase bisa diinisialisasi tanpa exception.
+const databaseId = readEnv('EXPO_PUBLIC_FIREBASE_DATABASE_ID') || undefined;
+
 const isConfigComplete =
-  firebaseConfig.apiKey !== '' &&
-  firebaseConfig.authDomain !== '' &&
-  firebaseConfig.projectId !== '';
+  Boolean(firebaseConfig.apiKey) &&
+  Boolean(firebaseConfig.authDomain) &&
+  Boolean(firebaseConfig.projectId);
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -25,16 +28,25 @@ let db: Firestore | null = null;
 
 try {
   if (isConfigComplete) {
-    app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
+    if (getApps().length > 0) {
+      app = getApps()[0];
+      auth = getAuth(app);
+    } else {
+      app = initializeApp(firebaseConfig);
+      try {
+        auth = initializeAuth(app, {
+          persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+        });
+      } catch {
+        auth = getAuth(app);
+      }
+    }
+    db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
   } else {
-    console.warn(
-      '[Firebase] Konfigurasi .env tidak lengkap (cek EXPO_PUBLIC_FIREBASE_API_KEY / AUTH_DOMAIN / PROJECT_ID). Firebase dinonaktifkan.'
-    );
+    console.log('[Firebase] Berjalan dalam mode database lokal (AsyncStorage).');
   }
 } catch (error) {
-  console.error('Firebase initialization error:', error);
+  console.warn('[Firebase] Inisialisasi Firebase dilewati:', error);
 }
 
 export { app, auth, db };
