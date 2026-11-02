@@ -5,13 +5,13 @@ import { HistoryScreen } from '../screens/customer/HistoryScreen';
 import { ProfileScreen } from '../screens/customer/ProfileScreen';
 import { BookingStackNavigator } from './BookingStackNavigator';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants';
+import { useTheme } from '../contexts/ThemeContext';
 
-const TabIcon: React.FC<{ name: string; label: string; focused: boolean }> = ({
-  name,
-  label,
-  focused,
-}) => {
+const TabIcon: React.FC<{
+  label: string;
+  focused: boolean;
+  color: string;
+}> = ({ label, focused, color }) => {
   const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
     Home: focused ? 'home' : 'home-outline',
     Booking: focused ? 'calendar' : 'calendar-outline',
@@ -22,21 +22,27 @@ const TabIcon: React.FC<{ name: string; label: string; focused: boolean }> = ({
     <Ionicons
       name={iconMap[label] ?? 'ellipse'}
       size={22}
-      color={focused ? Colors.primary : Colors.textLight}
+      color={color}
     />
   );
 };
 
 export const CustomerNavigator: React.FC = () => {
+  const { colors } = useTheme();
+
   return (
     <CustomerTabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarIcon: ({ focused }) => (
-          <TabIcon name={route.name} label={route.name} focused={focused} />
+        tabBarIcon: ({ focused, color }) => (
+          <TabIcon label={route.name} focused={focused} color={color} />
         ),
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textLight,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textLight,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
       })}>
       <CustomerTabs.Screen name="Home" component={HomeScreen} />
       <CustomerTabs.Screen name="Booking" component={BookingStackNavigator} />

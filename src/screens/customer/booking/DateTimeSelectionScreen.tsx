@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
@@ -15,8 +14,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getBookedSlots, getBlockedSlots } from '../../../services/firestore';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
-import { Badge } from '../../../components/Badge';
-import { Colors, Typography, Spacing, Layout, Radius } from '../../../constants';
+import { BookingStepIndicator } from '../../../components/BookingStepIndicator';
+import { Typography, Spacing, Layout, Radius } from '../../../constants';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { getDateOptions, generateTimeSlots, TimeSlot } from '../../../utils/dates';
 import { formatDateLong } from '../../../utils/format';
 
@@ -31,6 +31,7 @@ const DATE_OPTIONS = getDateOptions(7);
 export const DateTimeSelectionScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RoutePropType>();
+  const { colors, isDark } = useTheme();
   const { services, barber } = route.params;
 
   const [selectedDate, setSelectedDate] = useState(DATE_OPTIONS[0].value);
@@ -75,33 +76,142 @@ export const DateTimeSelectionScreen: React.FC = () => {
   const selectedDateObj =
     DATE_OPTIONS.find((o) => o.value === selectedDate)?.date ?? DATE_OPTIONS[0].date;
 
+  // Group slots by period for great readability
+  const morningSlots = useMemo(
+    () => slots.filter((s) => s.time < '12:00'),
+    [slots]
+  );
+  const afternoonSlots = useMemo(
+    () => slots.filter((s) => s.time >= '12:00' && s.time < '16:00'),
+    [slots]
+  );
+  const eveningSlots = useMemo(
+    () => slots.filter((s) => s.time >= '16:00'),
+    [slots]
+  );
+
+  const renderSlotGrid = (items: TimeSlot[]) => (
+    <View style={styles.grid}>
+      {items.map((item) => {
+        const isSelected = selectedSlot === item.time;
+        const isBooked = !item.available && !item.blocked;
+        const isBlocked = item.blocked;
+
+        return (
+          <TouchableOpacity
+            key={item.time}
+            disabled={!item.available || refreshing}
+            onPress={() => setSelectedSlot(item.time)}
+            activeOpacity={0.8}
+            style={[
+              styles.slotBtn,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+              isBlocked && {
+                backgroundColor: isDark ? '#451A03' : '#FEF3C7',
+                borderColor: '#F59E0B',
+                opacity: 0.7,
+              },
+              isBooked && {
+                backgroundColor: isDark ? '#3E1F1F' : '#FEE2E2',
+                borderColor: '#EF4444',
+                opacity: 0.7,
+              },
+              isSelected && {
+                backgroundColor: colors.primary,
+                borderColor: colors.primary,
+                opacity: 1,
+              },
+            ]}>
+            <Text
+              style={[
+                styles.slotTimeText,
+                {
+                  color: isSelected ? colors.white : colors.text,
+                },
+                (isBooked || isBlocked) && {
+                  color: colors.textSecondary,
+                  textDecorationLine: 'line-through',
+                },
+              ]}>
+              {item.time}
+            </Text>
+            <Text
+              style={[
+                styles.slotStatusText,
+                {
+                  color: isSelected
+                    ? colors.white
+                    : isBlocked
+                    ? '#B45309'
+                    : isBooked
+                    ? '#DC2626'
+                    : colors.secondary,
+                },
+              ]}>
+              {isSelected ? 'Dipilih' : isBlocked ? 'Tutup' : isBooked ? 'Penuh' : 'Tersedia'}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      {/* Stepper UX */}
+      <BookingStepIndicator currentStep={3} />
+
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.dateSection}>
-          <Text style={styles.sectionTitle}>Pilih Tanggal</Text>
+        {/* Date Section */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Pilih Tanggal</Text>
+            <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>Tersedia 7 hari ke depan</Text>
+          </View>
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.dateList}>
-            {DATE_OPTIONS.map((option) => {
+            {DATE_OPTIONS.map((option, idx) => {
               const selected = option.value === selectedDate;
+              const isToday = idx === 0;
+              const isTomorrow = idx === 1;
+
               return (
                 <TouchableOpacity
                   key={option.value}
                   onPress={() => setSelectedDate(option.value)}
                   style={[
-                    styles.dateChip,
-                    selected && styles.dateChipSelected,
-                  ]}>
+                    styles.dateCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+                    selected && {
+                      backgroundColor: colors.primary,
+                      borderColor: colors.primary,
+                    },
+                  ]}
+                  activeOpacity={0.8}>
                   <Text
                     style={[
-                      styles.dateChipLabel,
-                      selected && styles.dateChipLabelSelected,
+                      styles.dateDayTag,
+                      { color: selected ? colors.white : colors.textLight },
                     ]}>
-                    {option.label}
+                    {isToday ? 'Hari Ini' : isTomorrow ? 'Besok' : option.label.split(',')[0]}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.dateNumberText,
+                      { color: selected ? colors.white : colors.text },
+                    ]}>
+                    {option.label.split(',')[1]?.trim() || option.label}
                   </Text>
                 </TouchableOpacity>
               );
@@ -109,94 +219,119 @@ export const DateTimeSelectionScreen: React.FC = () => {
           </ScrollView>
         </View>
 
-        <View style={styles.slotHeader}>
-          <Text style={styles.sectionTitle}>Pilih Jam</Text>
-          <TouchableOpacity onPress={handleRefresh} style={styles.refreshBtn}>
+        {/* Selected Date Summary & Refresh */}
+        <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.summaryLeft}>
+            <Ionicons name="person-circle-outline" size={24} color={colors.primary} />
+            <View>
+              <Text style={[styles.barberTag, { color: colors.text }]}>Kapster: {barber.name}</Text>
+              <Text style={[styles.dateDetailText, { color: colors.textSecondary }]}>
+                {formatDateLong(selectedDateObj)}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            onPress={handleRefresh}
+            style={[styles.refreshPill, { backgroundColor: colors.surfaceVariant }]}
+            activeOpacity={0.7}>
             <Ionicons
               name="refresh"
-              size={16}
-              color={refreshing ? Colors.textLight : Colors.primary}
+              size={14}
+              color={refreshing ? colors.textLight : colors.primary}
             />
-            <Text style={styles.refreshText}>Segarkan</Text>
+            <Text style={[styles.refreshPillText, { color: colors.primary }]}>Cek Slot</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Legend */}
+        <View style={styles.legendRow}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.secondary }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Tersedia</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Dipilih</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.error }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Penuh</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>Ditutup</Text>
+          </View>
+        </View>
+
+        {/* Slots Content */}
         {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+            <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
             <Button title="Coba Lagi" onPress={handleRefresh} size="sm" />
           </View>
         ) : loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Memuat slot...</Text>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memeriksa ketersediaan jam...</Text>
           </View>
         ) : (
-          <>
-            <Text style={styles.dateInfo}>
-              {formatDateLong(selectedDateObj)} - Kapster {barber.name}
-            </Text>
-            <FlatList
-              data={slots}
-              keyExtractor={(item) => item.time}
-              scrollEnabled={false}
-              numColumns={3}
-              columnWrapperStyle={styles.slotRow}
-              renderItem={({ item }) => {
-                const isSelected = selectedSlot === item.time;
-                return (
-                  <TouchableOpacity
-                    disabled={!item.available || refreshing}
-                    onPress={() => setSelectedSlot(item.time)}
-                    style={[
-                      styles.slot,
-                      item.blocked && styles.slotBlocked,
-                      !item.available && !item.blocked && styles.slotTaken,
-                      isSelected && styles.slotSelected,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.slotTime,
-                        isSelected && styles.slotTimeSelected,
-                      ]}>
-                      {item.time}
-                    </Text>
-                    {!item.available ? (
-                      <Text style={styles.slotStatus}>Tidak tersedia</Text>
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              }}
-              ListEmptyComponent={
-                <View style={styles.center}>
-                  <Text style={styles.errorText}>
-                    Tidak ada slot tersedia pada tanggal ini.
-                  </Text>
+          <View style={styles.timeSection}>
+            {morningSlots.length > 0 && (
+              <View style={styles.periodGroup}>
+                <View style={styles.periodHeader}>
+                  <Ionicons name="sunny-outline" size={16} color="#F59E0B" />
+                  <Text style={[styles.periodTitle, { color: colors.text }]}>Pagi (09:00 - 11:30)</Text>
                 </View>
-              }
-            />
-          </>
+                {renderSlotGrid(morningSlots)}
+              </View>
+            )}
+
+            {afternoonSlots.length > 0 && (
+              <View style={styles.periodGroup}>
+                <View style={styles.periodHeader}>
+                  <Ionicons name="partly-sunny-outline" size={16} color="#3B82F6" />
+                  <Text style={[styles.periodTitle, { color: colors.text }]}>Siang (12:00 - 15:30)</Text>
+                </View>
+                {renderSlotGrid(afternoonSlots)}
+              </View>
+            )}
+
+            {eveningSlots.length > 0 && (
+              <View style={styles.periodGroup}>
+                <View style={styles.periodHeader}>
+                  <Ionicons name="moon-outline" size={16} color="#8B5CF6" />
+                  <Text style={[styles.periodTitle, { color: colors.text }]}>Sore & Malam (16:00 - 21:00)</Text>
+                </View>
+                {renderSlotGrid(eveningSlots)}
+              </View>
+            )}
+          </View>
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <View style={styles.legend}>
-          <Badge label="Tersedia" type="success" />
-          <Badge label="Terisi" type="error" />
-          <Badge label="Ditutup" type="warning" />
+      {/* Sticky Bottom Next Button */}
+      <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
+        <View style={styles.footerInfo}>
+          <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>
+            {selectedSlot ? `Jam Dipilih: ${selectedSlot} WIB` : 'Pilih salah satu jam yang tersedia'}
+          </Text>
         </View>
         <Button
-          title="Lanjut"
+          title={selectedSlot ? `Konfirmasi Booking (${selectedSlot} WIB)` : 'Pilih Jam Terlebih Dahulu'}
           size="lg"
-          disabled={!selectedSlot}
-          onPress={() =>
-            navigation.navigate('Confirmation', {
-              services,
-              barber,
-              date: selectedDate,
-              timeSlot: selectedSlot!,
-            })
-          }
+          disabled={!selectedSlot || loading}
+          iconPosition="right"
+          icon={<Ionicons name="arrow-forward" size={18} color={colors.white} />}
+          onPress={() => {
+            if (selectedSlot) {
+              navigation.navigate('Confirmation', {
+                services,
+                barber,
+                date: selectedDate,
+                timeSlot: selectedSlot,
+              });
+            }
+          }}
         />
       </View>
     </SafeAreaView>
@@ -206,134 +341,168 @@ export const DateTimeSelectionScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.xl,
   },
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.xl,
+  sectionWrap: {
+    marginBottom: Spacing.md,
   },
-  loadingText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginTop: Spacing.sm,
-  },
-  sectionTitle: {
-    ...Typography.h4,
-    color: Colors.text,
+  sectionHeaderRow: {
     marginBottom: Spacing.sm,
   },
-  dateSection: {
-    marginBottom: Spacing.lg,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
   },
   dateList: {
-    gap: Spacing.sm,
+    gap: 10,
+    paddingVertical: 4,
   },
-  dateChip: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+  dateCard: {
+    width: 90,
+    paddingVertical: 12,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceVariant,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  dateChipSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+  dateDayTag: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
   },
-  dateChipLabel: {
-    ...Typography.captionMedium,
-    color: Colors.textSecondary,
+  dateNumberText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
-  dateChipLabelSelected: {
-    color: Colors.white,
-  },
-  slotHeader: {
+  summaryCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.xs,
+    padding: 12,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
   },
-  refreshBtn: {
+  summaryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  barberTag: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dateDetailText: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  refreshPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    padding: Spacing.xs,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: Radius.full,
   },
-  refreshText: {
-    ...Typography.captionMedium,
-    color: Colors.primary,
+  refreshPillText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
-  dateInfo: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+  legendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     marginBottom: Spacing.md,
+    paddingVertical: 4,
   },
-  slotRow: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  slot: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceVariant,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  legendItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
   },
-  slotTime: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  slotStatus: {
-    ...Typography.small,
-    color: Colors.textLight,
-    marginTop: 2,
+  legendText: {
+    fontSize: 11,
   },
-  slotBlocked: {
-    backgroundColor: Colors.warningLight,
-    borderColor: '#FCD34D',
-    opacity: 0.9,
+  loadingBox: {
+    alignItems: 'center',
+    paddingVertical: 40,
   },
-  slotTaken: {
-    backgroundColor: Colors.errorLight,
-    borderColor: '#FCA5A5',
-    opacity: 0.8,
-  },
-  slotSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  slotTimeSelected: {
-    color: Colors.white,
+  loadingText: {
+    fontSize: 13,
+    marginTop: 8,
   },
   errorBox: {
-    backgroundColor: Colors.errorLight,
-    borderRadius: Radius.lg,
     padding: Spacing.md,
+    borderRadius: Radius.lg,
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 10,
+    marginVertical: Spacing.md,
   },
   errorText: {
-    ...Typography.body,
-    color: Colors.text,
+    fontSize: 13,
     textAlign: 'center',
+  },
+  timeSection: {
+    gap: Spacing.md,
+  },
+  periodGroup: {
+    marginBottom: Spacing.xs,
+  },
+  periodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  periodTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  slotBtn: {
+    width: '31%',
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotTimeText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  slotStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
   },
   footer: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
-    gap: Spacing.sm,
   },
-  legend: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
+  footerInfo: {
+    marginBottom: Spacing.sm,
+    alignItems: 'center',
+  },
+  footerLabel: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

@@ -17,7 +17,9 @@ import { Booking } from '../../../types';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
-import { Colors, Typography, Spacing, Layout, Radius } from '../../../constants';
+import { BookingStepIndicator } from '../../../components/BookingStepIndicator';
+import { Typography, Spacing, Layout, Radius } from '../../../constants';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { formatRupiah, parseDateString, formatDateLong } from '../../../utils/format';
 
 type NavigationProp = NativeStackNavigationProp<
@@ -31,6 +33,7 @@ export const ConfirmationScreen: React.FC = () => {
   const route = useRoute<RoutePropType>();
   const { services, barber, date, timeSlot } = route.params;
   const { user, profile } = useAuth();
+  const { colors, isDark } = useTheme();
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -45,8 +48,8 @@ export const ConfirmationScreen: React.FC = () => {
       const bookedSlots = await getBookedSlots(barber.id, date);
       if (bookedSlots.includes(timeSlot)) {
         Alert.alert(
-          'Slot Sudah Terisi',
-          'Slot yang Anda pilih baru saja dipesan pelanggan lain. Silakan pilih slot lain.'
+          'Slot Baru Saja Terisi',
+          'Slot jam yang Anda pilih baru saja dipesan pelanggan lain. Silakan pilih slot jam lain.'
         );
         setSubmitting(false);
         return;
@@ -82,18 +85,12 @@ export const ConfirmationScreen: React.FC = () => {
         createdAt: Date.now(),
       };
 
-      // Pengingat lokal X menit sebelum jadwal (opsional, tergantung izin notifikasi).
-      const reminderStatus = await scheduleBookingReminder(
+      // Pengingat lokal X menit sebelum jadwal
+      await scheduleBookingReminder(
         bookingId,
         date,
         timeSlot
       );
-      if (reminderStatus === 'denied') {
-        Alert.alert(
-          'Pengingat',
-          'Booking berhasil. Aktifkan izin notifikasi untuk mendapatkan pengingat jadwal.'
-        );
-      }
 
       navigation.reset({
         index: 1,
@@ -106,73 +103,94 @@ export const ConfirmationScreen: React.FC = () => {
       console.error(err);
       Alert.alert(
         'Booking Gagal',
-        'Terjadi kesalahan saat membuat booking. Silakan coba lagi.'
+        'Terjadi kendala jaringan saat memproses pesanan. Silakan coba kembali.'
       );
       setSubmitting(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      {/* Stepper UX */}
+      <BookingStepIndicator currentStep={4} />
+
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.checkmarkCircle}>
-          <Ionicons name="clipboard-outline" size={40} color={Colors.white} />
+        
+        {/* Header Icon & Title */}
+        <View style={styles.headerHero}>
+          <View style={[styles.iconCircle, { backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF' }]}>
+            <Ionicons name="shield-checkmark" size={36} color={colors.primary} />
+          </View>
+          <Text style={[styles.title, { color: colors.text }]}>Konfirmasi Pesanan</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Satu langkah lagi untuk mendapatkan E-Ticket antrean Anda
+          </Text>
         </View>
-        <Text style={styles.title}>Periksa Detail Booking</Text>
-        <Text style={styles.subtitle}>
-          Pastikan detail di bawah sudah benar sebelum mengonfirmasi.
-        </Text>
 
-        <Card>
-          <Text style={styles.cardTitle}>Layanan</Text>
+        {/* Schedule Highlights Card */}
+        <Card style={styles.scheduleCard}>
+          <View style={styles.scheduleRow}>
+            <View style={[styles.calendarIconBox, { backgroundColor: colors.primary }]}>
+              <Ionicons name="calendar" size={20} color={colors.white} />
+            </View>
+            <View style={styles.scheduleTextWrap}>
+              <Text style={[styles.scheduleDate, { color: colors.text }]}>{formatDateLong(dateObj)}</Text>
+              <Text style={[styles.scheduleTime, { color: colors.primaryDark }]}>Pukul {timeSlot} WIB</Text>
+            </View>
+          </View>
+
+          <View style={[styles.barberRow, { borderTopColor: colors.border }]}>
+            <Ionicons name="cut" size={18} color={colors.textSecondary} />
+            <Text style={[styles.barberLabel, { color: colors.textSecondary }]}>Kapster Pilihan:</Text>
+            <Text style={[styles.barberName, { color: colors.text }]}>{barber.name}</Text>
+          </View>
+        </Card>
+
+        {/* Service Breakdown */}
+        <Card style={styles.serviceBreakdownCard}>
+          <Text style={[styles.cardHeaderTitle, { color: colors.textSecondary }]}>RINCIAN LAYANAN</Text>
           {services.map((s) => (
-            <View key={s.id} style={styles.row}>
-              <Text style={styles.rowLabel}>{s.name}</Text>
-              <Text style={styles.rowValue}>{formatRupiah(s.price)}</Text>
+            <View key={s.id} style={styles.serviceItemRow}>
+              <View style={styles.serviceItemLeft}>
+                <Text style={[styles.serviceItemName, { color: colors.text }]}>{s.name}</Text>
+                <Text style={[styles.serviceItemDuration, { color: colors.textLight }]}>~{s.durationMinutes} menit</Text>
+              </View>
+              <Text style={[styles.serviceItemPrice, { color: colors.text }]}>{formatRupiah(s.price)}</Text>
             </View>
           ))}
-          <View style={styles.divider} />
-          <View style={styles.row}>
-            <Text style={styles.rowTotal}>Total</Text>
-            <Text style={styles.rowTotalValue}>{formatRupiah(totalPrice)}</Text>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <View style={styles.totalRow}>
+            <View>
+              <Text style={[styles.totalLabel, { color: colors.text }]}>Total Biaya</Text>
+              <Text style={[styles.durationSummary, { color: colors.textLight }]}>Total durasi: ~{totalDuration} menit</Text>
+            </View>
+            <Text style={[styles.totalAmount, { color: colors.primaryDark }]}>{formatRupiah(totalPrice)}</Text>
           </View>
         </Card>
 
-        <Card>
-          <Text style={styles.cardTitle}>Detail Jadwal</Text>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Kapster</Text>
-            <Text style={styles.rowValue}>{barber.name}</Text>
+        {/* Payment Notice */}
+        <View style={[styles.noticeBox, { backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF', borderColor: colors.border }]}>
+          <Ionicons name="cash-outline" size={20} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.noticeTitle, { color: colors.text }]}>Pembayaran di Kasir</Text>
+            <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
+              Tidak perlu transfer sekarang. Pembayaran dapat dilakukan tunai atau QRIS setelah selesai potong rambut.
+            </Text>
           </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Tanggal</Text>
-            <Text style={styles.rowValue}>{formatDateLong(dateObj)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Jam</Text>
-            <Text style={styles.rowValue}>{timeSlot} WIB</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Durasi</Text>
-            <Text style={styles.rowValue}>{totalDuration} menit</Text>
-          </View>
-        </Card>
-
-        <View style={styles.notice}>
-          <Ionicons name="information-circle" size={18} color={Colors.primary} />
-          <Text style={styles.noticeText}>
-            Pembayaran dilakukan langsung di barbershop setelah layanan selesai.
-          </Text>
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      {/* Sticky Bottom Action */}
+      <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
         <Button
-          title="Konfirmasi Booking"
+          title={submitting ? 'Memproses E-Ticket...' : 'Konfirmasi & Dapatkan Tiket'}
           size="lg"
           loading={submitting}
+          icon={!submitting ? <Ionicons name="ticket-outline" size={18} color={colors.white} /> : undefined}
           onPress={handleConfirm}
         />
       </View>
@@ -183,85 +201,149 @@ export const ConfirmationScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.xl,
   },
-  checkmarkCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.primary,
+  headerHero: {
+    alignItems: 'center',
+    marginVertical: Spacing.md,
+  },
+  iconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: Spacing.md,
-    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   title: {
-    ...Typography.h3,
-    color: Colors.text,
+    fontSize: 20,
+    fontWeight: '800',
     textAlign: 'center',
   },
   subtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
+    fontSize: 13,
     textAlign: 'center',
-    marginBottom: Spacing.lg,
-    marginTop: Spacing.xs,
+    marginTop: 4,
   },
-  cardTitle: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
+  scheduleCard: {
+    padding: 14,
+    marginBottom: 12,
   },
-  row: {
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  calendarIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scheduleTextWrap: {
+    flex: 1,
+  },
+  scheduleDate: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  scheduleTime: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  barberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderTopWidth: 1,
+    paddingTop: 10,
+  },
+  barberLabel: {
+    fontSize: 13,
+  },
+  barberName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  serviceBreakdownCard: {
+    padding: 14,
+    marginBottom: 12,
+  },
+  cardHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  serviceItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginVertical: 4,
-    gap: Spacing.md,
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  rowLabel: {
-    ...Typography.body,
-    color: Colors.textSecondary,
+  serviceItemLeft: {
+    flex: 1,
   },
-  rowValue: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+  serviceItemName: {
+    fontSize: 14,
+    fontWeight: '600',
   },
-  rowTotal: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+  serviceItemDuration: {
+    fontSize: 11,
+    marginTop: 2,
   },
-  rowTotalValue: {
-    ...Typography.bodyMedium,
-    color: Colors.primaryDark,
+  serviceItemPrice: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.sm,
+    marginVertical: 10,
   },
-  notice: {
+  totalRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.surfaceVariant,
+  },
+  totalLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  durationSummary: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  totalAmount: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  noticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 14,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  noticeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   noticeText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
   },
   footer: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
   },
 });

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Typography } from '../constants';
+import { Typography } from '../constants';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface RatingInputProps {
   value: number;
@@ -16,6 +17,8 @@ export const RatingInput: React.FC<RatingInputProps> = ({
   size = 32,
   readonly = false,
 }) => {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.row}>
       {[1, 2, 3, 4, 5].map((star) => {
@@ -25,7 +28,7 @@ export const RatingInput: React.FC<RatingInputProps> = ({
             key={star}
             name={filled ? 'star' : 'star-outline'}
             size={size}
-            color={filled ? Colors.accent : Colors.border}
+            color={filled ? colors.accent : colors.border}
             style={styles.star}
           />
         ) : (
@@ -33,7 +36,7 @@ export const RatingInput: React.FC<RatingInputProps> = ({
             <Ionicons
               name={filled ? 'star' : 'star-outline'}
               size={size}
-              color={filled ? Colors.accent : Colors.border}
+              color={filled ? colors.accent : colors.border}
               style={styles.star}
             />
           </TouchableOpacity>
@@ -46,13 +49,17 @@ export const RatingInput: React.FC<RatingInputProps> = ({
 export const RatingSummary: React.FC<{ average: number; count: number }> = ({
   average,
   count,
-}) => (
-  <View style={styles.summaryRow}>
-    <Ionicons name="star" size={16} color={Colors.accent} />
-    <Text style={styles.average}>{average.toFixed(1)}</Text>
-    <Text style={styles.count}>({count})</Text>
-  </View>
-);
+}) => {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.summaryRow}>
+      <Ionicons name="star" size={16} color={colors.accent} />
+      <Text style={[styles.average, { color: colors.text }]}>{average.toFixed(1)}</Text>
+      <Text style={[styles.count, { color: colors.textLight }]}>({count})</Text>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   row: {
@@ -69,10 +76,8 @@ const styles = StyleSheet.create({
   },
   average: {
     ...Typography.captionMedium,
-    color: Colors.text,
   },
   count: {
     ...Typography.caption,
-    color: Colors.textLight,
   },
 });

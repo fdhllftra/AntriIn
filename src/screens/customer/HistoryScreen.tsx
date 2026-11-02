@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,13 +18,24 @@ import {
   getReviewByBooking,
 } from '../../services/firestore';
 import { cancelBookingReminder } from '../../services/notifications';
-import { Booking } from '../../types';
+import { Booking, BookingStatus } from '../../types';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { ReviewModal } from '../../components/ReviewModal';
-import { Colors, Typography, Spacing, Layout, Radius } from '../../constants';
+import { ETicketModal } from '../../components/ETicketModal';
+import { Typography, Spacing, Layout, Radius } from '../../constants';
+import { useTheme } from '../../contexts/ThemeContext';
 import { formatRupiah, parseDateString, formatDateLong } from '../../utils/format';
+
+type FilterTab = 'Semua' | BookingStatus;
+
+const FILTERS: { label: string; value: FilterTab }[] = [
+  { label: 'Semua', value: 'Semua' },
+  { label: 'Aktif', value: 'Menunggu' },
+  { label: 'Selesai', value: 'Selesai' },
+  { label: 'Batal', value: 'Batal' },
+];
 
 const statusBadgeMap: Record<Booking['status'], 'warning' | 'success' | 'error'> = {
   Menunggu: 'warning',
@@ -34,11 +45,13 @@ const statusBadgeMap: Record<Booking['status'], 'warning' | 'success' | 'error'>
 
 export const HistoryScreen: React.FC = () => {
   const { user } = useAuth();
+  const { colors, isDark } = useTheme();
+  
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [activeFilter, setActiveFilter] = useState<FilterTab>('Semua');
+  const [selectedTicket, setSelectedTicket] = useState<Booking | null>(null);
   const [reviewedBookingIds, setReviewedBookingIds] = useState<string[]>([]);
-  const [activeReviewBooking, setActiveReviewBooking] = useState<Booking | null>(
-    null
-  );
+  const [activeReviewBooking, setActiveReviewBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,9 +90,9 @@ export const HistoryScreen: React.FC = () => {
   const handleCancel = (booking: Booking) => {
     Alert.alert(
       'Batalkan Booking',
-      'Yakin ingin membatalkan booking ini?',
+      'Yakin ingin membatalkan jadwal booking ini? Slot waktu akan dikembalikan.',
       [
-        { text: 'Batal', style: 'cancel' },
+        { text: 'Tidak', style: 'cancel' },
         {
           text: 'Ya, Batalkan',
           style: 'destructive',
@@ -89,7 +102,7 @@ export const HistoryScreen: React.FC = () => {
               cancelBookingReminder(booking.id);
               loadBookings();
             } catch (err) {
-              Alert.alert('Gagal', 'Terjadi kesalahan. Silakan coba lagi.');
+              Alert.alert('Gagal', 'Terjadi kesalahan saat membatalkan.');
               console.error(err);
             }
           },
@@ -98,35 +111,78 @@ export const HistoryScreen: React.FC = () => {
     );
   };
 
+  const filteredBookings = useMemo(() => {
+    if (activeFilter === 'Semua') return bookings;
+    return bookings.filter((b) => b.status === activeFilter);
+  }, [bookings, activeFilter]);
+
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Memuat riwayat...</Text>
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memuat riwayat...</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.screenTitle}>Riwayat Booking</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      {/* Screen Header */}
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.screenTitle, { color: colors.text }]}>Riwayat Antrean & Booking</Text>
+        <Text style={[styles.screenSub, { color: colors.textSecondary }]}>Pantau jadwal dan bukti tiket Anda</Text>
+
+        {/* Filter Pills */}
+        <View style={styles.filterRow}>
+          {FILTERS.map((tab) => {
+            const isSelected = activeFilter === tab.value;
+            return (
+              <TouchableOpacity
+                key={tab.value}
+                onPress={() => setActiveFilter(tab.value)}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: isSelected
+                      ? colors.primary
+                      : isDark
+                      ? colors.surfaceVariant
+                      : '#F1F5F9',
+                  },
+                ]}
+                activeOpacity={0.8}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    {
+                      color: isSelected ? colors.white : colors.textSecondary,
+                      fontWeight: isSelected ? '700' : '500',
+                    },
+                  ]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={[styles.errorBox, { backgroundColor: colors.errorLight }]}>
+          <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
           <Button title="Coba Lagi" onPress={loadBookings} size="sm" />
         </View>
       ) : (
         <FlatList
-          data={bookings}
+          data={filteredBookings}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
               onRefresh={() => {
                 setRefreshing(true);
                 loadBookings();
@@ -135,67 +191,116 @@ export const HistoryScreen: React.FC = () => {
           }
           ListEmptyComponent={
             <View style={styles.emptyBox}>
-              <Ionicons name="time-outline" size={48} color={Colors.textLight} />
-              <Text style={styles.emptyTitle}>Belum ada booking</Text>
-              <Text style={styles.emptyText}>
-                Booking yang Anda buat akan muncul di sini.
+              <View style={[styles.emptyIconCircle, { backgroundColor: isDark ? colors.surfaceVariant : '#F1F5F9' }]}>
+                <Ionicons name="calendar-outline" size={40} color={colors.textLight} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                {activeFilter === 'Semua' ? 'Belum Ada Booking' : `Tidak Ada Booking ${activeFilter}`}
+              </Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                {activeFilter === 'Semua'
+                  ? 'Pemesanan jadwal yang Anda buat akan tersimpan di sini.'
+                  : `Riwayat dengan status ${activeFilter} masih kosong.`}
               </Text>
             </View>
           }
           renderItem={({ item }) => {
             const dateObj = parseDateString(item.date);
+            const isPending = item.status === 'Menunggu';
+            const isDone = item.status === 'Selesai';
+            const hasReview = reviewedBookingIds.includes(item.id);
+
             return (
-              <Card>
-                <View style={styles.badgeRow}>
+              <Card style={styles.bookingCard}>
+                {/* Header: Status & Code */}
+                <View style={styles.cardHeader}>
                   <Badge label={item.status} type={statusBadgeMap[item.status]} />
-                  <Text style={styles.bookingId}>#{item.id.slice(-6).toUpperCase()}</Text>
-                </View>
-                <Text style={styles.barberName}>{item.barberName}</Text>
-                <Text style={styles.dateText}>{formatDateLong(dateObj)}</Text>
-                <View style={styles.detailRow}>
-                  <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
-                  <Text style={styles.detailText}>{item.timeSlot} WIB</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Ionicons name="cut-outline" size={16} color={Colors.textSecondary} />
-                  <Text style={styles.detailText} numberOfLines={1}>
-                    {item.services.map((s) => s.name).join(', ')}
+                  <Text style={[styles.bookingIdText, { color: colors.textLight }]}>
+                    #{item.id.slice(-6).toUpperCase()}
                   </Text>
                 </View>
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Total</Text>
-                  <Text style={styles.priceValue}>{formatRupiah(item.totalPrice)}</Text>
+
+                {/* Barber & Schedule */}
+                <View style={styles.cardMain}>
+                  <View style={[styles.barberAvatarMini, { backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF' }]}>
+                    <Ionicons name="cut" size={20} color={colors.primary} />
+                  </View>
+                  <View style={styles.cardInfo}>
+                    <Text style={[styles.barberName, { color: colors.text }]}>{item.barberName}</Text>
+                    <View style={styles.metaRow}>
+                      <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} />
+                      <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatDateLong(dateObj)}</Text>
+                      <Text style={[styles.dotSep, { color: colors.textLight }]}>•</Text>
+                      <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
+                      <Text style={[styles.metaTextHighlight, { color: colors.primaryDark }]}>{item.timeSlot} WIB</Text>
+                    </View>
+                  </View>
                 </View>
-                {item.status === 'Menunggu' ? (
-                  <Button
-                    title="Batalkan Booking"
-                    variant="danger"
-                    size="sm"
-                    onPress={() => handleCancel(item)}
-                  />
-                ) : null}
-                {item.status === 'Selesai' &&
-                !reviewedBookingIds.includes(item.id) ? (
-                  <Button
-                    title="Beri Rating Kapster"
-                    variant="secondary"
-                    size="sm"
-                    onPress={() => setActiveReviewBooking(item)}
-                  />
-                ) : null}
-                {item.status === 'Selesai' &&
-                reviewedBookingIds.includes(item.id) ? (
-                  <Text style={styles.reviewedText}>
-                    Terima kasih! Kapster telah Anda rating.
+
+                {/* Services Pills */}
+                <View style={[styles.serviceRow, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.serviceListText, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {item.services.map((s) => s.name).join(' • ')}
                   </Text>
-                ) : null}
+                  <Text style={[styles.priceText, { color: colors.text }]}>{formatRupiah(item.totalPrice)}</Text>
+                </View>
+
+                {/* Action Row */}
+                <View style={[styles.actionRow, { borderTopColor: colors.border }]}>
+                  {isPending && (
+                    <>
+                      <Button
+                        title="Lihat E-Ticket"
+                        size="sm"
+                        icon={<Ionicons name="qr-code-outline" size={15} color={colors.white} />}
+                        onPress={() => setSelectedTicket(item)}
+                        style={{ flex: 1.2 }}
+                      />
+                      <Button
+                        title="Batalkan"
+                        variant="ghost"
+                        size="sm"
+                        onPress={() => handleCancel(item)}
+                        textStyle={{ color: colors.error }}
+                        style={{ flex: 0.8 }}
+                      />
+                    </>
+                  )}
+
+                  {isDone && !hasReview && (
+                    <Button
+                      title="Beri Nilai & Ulasan"
+                      variant="outline"
+                      size="sm"
+                      icon={<Ionicons name="star-outline" size={15} color={colors.primary} />}
+                      onPress={() => setActiveReviewBooking(item)}
+                      style={{ flex: 1 }}
+                    />
+                  )}
+
+                  {isDone && hasReview && (
+                    <View style={styles.reviewedNotice}>
+                      <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                      <Text style={[styles.reviewedNoticeText, { color: colors.success }]}>
+                        Ulasan Anda telah tersimpan
+                      </Text>
+                    </View>
+                  )}
+
+                  {item.status === 'Batal' && (
+                    <Text style={[styles.cancelledNotice, { color: colors.textLight }]}>
+                      Pemesanan ini telah dibatalkan
+                    </Text>
+                  )}
+                </View>
               </Card>
             );
           }}
         />
       )}
 
-      {activeReviewBooking ? (
+      {/* Review Modal */}
+      {activeReviewBooking && (
         <ReviewModal
           visible
           booking={activeReviewBooking}
@@ -203,10 +308,17 @@ export const HistoryScreen: React.FC = () => {
           onSuccess={() => {
             setActiveReviewBooking(null);
             loadBookings();
-            Alert.alert('Berhasil', 'Rating Anda telah terkirim.');
+            Alert.alert('Terima Kasih', 'Ulasan Anda berhasil dikirim!');
           }}
         />
-      ) : null}
+      )}
+
+      {/* Global E-Ticket Viewer */}
+      <ETicketModal
+        visible={!!selectedTicket}
+        booking={selectedTicket}
+        onClose={() => setSelectedTicket(null)}
+      />
     </SafeAreaView>
   );
 };
@@ -214,115 +326,171 @@ export const HistoryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
-    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingText: {
     ...Typography.body,
-    color: Colors.textSecondary,
     marginTop: Spacing.md,
   },
   header: {
     paddingHorizontal: Layout.screenPadding,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
   },
   screenTitle: {
-    ...Typography.h2,
-    color: Colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  screenSub: {
+    fontSize: 12,
+    marginTop: 2,
+    marginBottom: Spacing.sm,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 4,
+  },
+  filterChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: Radius.full,
+  },
+  filterChipText: {
+    fontSize: 12,
   },
   listContent: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.xl,
-    flexGrow: 1,
   },
-  badgeRow: {
+  bookingCard: {
+    padding: 14,
+    marginBottom: 12,
+  },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 10,
   },
-  bookingId: {
-    ...Typography.caption,
-    color: Colors.textLight,
+  bookingIdText: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    fontWeight: '600',
   },
-  barberName: {
-    ...Typography.h4,
-    color: Colors.text,
-  },
-  dateText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  detailRow: {
+  cardMain: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    gap: 12,
+    marginBottom: 10,
   },
-  detailText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
+  barberAvatarMini: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardInfo: {
     flex: 1,
   },
-  priceRow: {
+  barberName: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 12,
+  },
+  metaTextHighlight: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dotSep: {
+    fontSize: 12,
+  },
+  serviceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    paddingTop: 8,
+    marginBottom: 8,
+  },
+  serviceListText: {
+    fontSize: 12,
+    flex: 1,
+    marginRight: 8,
+  },
+  priceText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderTopWidth: 1,
+    paddingTop: 10,
+  },
+  reviewedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  reviewedNoticeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  cancelledNotice: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    paddingVertical: 4,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 50,
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: Spacing.md,
   },
-  priceLabel: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-  },
-  priceValue: {
-    ...Typography.bodyMedium,
-    color: Colors.primaryDark,
+  emptyTitle: {
+    fontSize: 16,
     fontWeight: '700',
+    marginBottom: 4,
   },
-  reviewedText: {
-    ...Typography.caption,
-    color: Colors.success,
+  emptyText: {
+    fontSize: 13,
     textAlign: 'center',
-    marginTop: Spacing.sm,
+    paddingHorizontal: 20,
   },
   errorBox: {
     margin: Layout.screenPadding,
-    backgroundColor: Colors.errorLight,
-    borderRadius: Radius.lg,
     padding: Spacing.md,
+    borderRadius: Radius.lg,
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 10,
   },
   errorText: {
-    ...Typography.body,
-    color: Colors.text,
-  },
-  emptyBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.xl,
-  },
-  emptyTitle: {
-    ...Typography.h4,
-    color: Colors.text,
-    marginTop: Spacing.md,
-  },
-  emptyText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+    fontSize: 13,
     textAlign: 'center',
-    marginTop: Spacing.xs,
   },
 });

@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle, StyleProp } from 'react-native';
-import { Colors, Radius, Shadow } from '../constants';
+import { View, Text, StyleSheet, ViewStyle, StyleProp, TouchableOpacity } from 'react-native';
+import { Radius } from '../constants';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface CardProps {
   children: React.ReactNode;
@@ -8,28 +9,53 @@ interface CardProps {
   onPress?: () => void;
 }
 
-export const Card: React.FC<CardProps> = ({ children, style }) => {
-  return <View style={[styles.card, style]}>{children}</View>;
+export const Card: React.FC<CardProps> = ({ children, style, onPress }) => {
+  const { colors } = useTheme();
+
+  const containerStyle = [
+    styles.card,
+    {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+    },
+    style,
+  ];
+
+  if (onPress) {
+    return (
+      <TouchableOpacity activeOpacity={0.75} onPress={onPress} style={containerStyle}>
+        {children}
+      </TouchableOpacity>
+    );
+  }
+
+  return <View style={containerStyle}>{children}</View>;
 };
 
 export const CardTitle: React.FC<{ title: string; subtitle?: string }> = ({
   title,
   subtitle,
-}) => (
-  <View style={styles.titleContainer}>
-    <Text style={styles.title}>{title}</Text>
-    {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-  </View>
-);
+}) => {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.titleContainer}>
+      <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+      {subtitle ? (
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {subtitle}
+        </Text>
+      ) : null}
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.background,
     borderRadius: Radius.xl,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   titleContainer: {
     marginBottom: 8,
@@ -37,11 +63,9 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.text,
   },
   subtitle: {
     fontSize: 13,
-    color: Colors.textSecondary,
     marginTop: 2,
   },
 });

@@ -1,7 +1,8 @@
-export const Colors = {
+export const LightColors = {
   primary: '#2563EB',
   primaryDark: '#1D4ED8',
   primaryLight: '#93C5FD',
+  primaryBackground: '#EFF6FF',
   secondary: '#10B981',
   secondaryDark: '#059669',
   accent: '#F59E0B',
@@ -24,4 +25,33 @@ export const Colors = {
   greyLight: '#F3F4F6',
 } as const;
 
-export type ColorType = typeof Colors;
+export const DarkColors = {
+  primary: '#3B82F6',
+  primaryDark: '#2563EB',
+  primaryLight: '#1E3A8A',
+  primaryBackground: '#172554',
+  secondary: '#10B981',
+  secondaryDark: '#059669',
+  accent: '#F59E0B',
+  background: '#0B0F19',
+  surface: '#151D2F',
+  surfaceVariant: '#1E293B',
+  text: '#F1F5F9',
+  textSecondary: '#94A3B8',
+  textLight: '#64748B',
+  border: '#263044',
+  error: '#EF4444',
+  errorLight: '#450A0A',
+  success: '#22C55E',
+  successLight: '#052E16',
+  warning: '#F59E0B',
+  warningLight: '#451A03',
+  white: '#FFFFFF',
+  black: '#000000',
+  grey: '#94A3B8',
+  greyLight: '#1E293B',
+} as const;
+
+export type ThemeColors = Record<keyof typeof LightColors, string>;
+export const Colors = LightColors;
+export type ColorType = ThemeColors;

@@ -14,7 +14,8 @@ import { createReview } from '../services/firestore';
 import { Booking } from '../types';
 import { Button } from './Button';
 import { RatingInput } from './RatingInput';
-import { Colors, Typography, Spacing, Radius, Layout } from '../constants';
+import { Typography, Spacing, Radius, Layout } from '../constants';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ReviewModalProps {
   visible: boolean;
@@ -29,6 +30,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { colors } = useTheme();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -65,15 +67,15 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}>
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.surface }]}>
           <View style={styles.header}>
-            <Text style={styles.title}>Beri Rating Kapster</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Beri Rating Kapster</Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.subtitle}>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Seberapa puas Anda dengan layanan {booking.barberName}?
           </Text>
 
@@ -82,16 +84,23 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           </View>
 
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.surfaceVariant,
+                borderColor: colors.border,
+                color: colors.text,
+              },
+            ]}
             placeholder="Tulis komentar (opsional)..."
-            placeholderTextColor={Colors.textLight}
+            placeholderTextColor={colors.textLight}
             value={comment}
             onChangeText={setComment}
             multiline
             maxLength={300}
           />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <Text style={[styles.error, { color: colors.error }]}>{error}</Text> : null}
 
           <Button
             title="Kirim Rating"
@@ -108,12 +117,11 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     padding: Layout.screenPadding,
   },
   container: {
-    backgroundColor: Colors.background,
     borderRadius: Radius.xl,
     padding: Spacing.lg,
   },
@@ -124,11 +132,9 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Typography.h4,
-    color: Colors.text,
   },
   subtitle: {
     ...Typography.body,
-    color: Colors.textSecondary,
     marginTop: Spacing.xs,
   },
   starsBox: {
@@ -137,18 +143,15 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.md,
     padding: Spacing.md,
     minHeight: 96,
     textAlignVertical: 'top',
     ...Typography.body,
-    color: Colors.text,
     marginBottom: Spacing.md,
   },
   error: {
     ...Typography.caption,
-    color: Colors.error,
     marginBottom: Spacing.sm,
   },
 });

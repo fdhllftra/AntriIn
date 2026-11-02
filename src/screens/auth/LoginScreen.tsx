@@ -9,12 +9,14 @@ import {
   TextInput,
   TouchableOpacity,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/Button';
-import { Colors, Typography, Spacing, Layout, Radius } from '../../constants';
+import { Typography, Spacing, Layout, Radius } from '../../constants';
+import { useTheme } from '../../contexts/ThemeContext';
 import { UserRole } from '../../types';
 
 type AuthTab = 'whatsapp' | 'email';
@@ -30,6 +32,7 @@ export const LoginScreen: React.FC = () => {
     authError,
     clearAuthError,
   } = useAuth();
+  const { colors, isDark } = useTheme();
 
   // Tab State: 'whatsapp' or 'email'
   const [activeTab, setActiveTab] = useState<AuthTab>('whatsapp');
@@ -40,7 +43,6 @@ export const LoginScreen: React.FC = () => {
   // WhatsApp form states
   const [waPhone, setWaPhone] = useState('');
   const [waName, setWaName] = useState('');
-  const [waRole, setWaRole] = useState<UserRole>('customer');
   const [waStep, setWaStep] = useState<'phone' | 'otp'>('phone');
   const [waOtp, setWaOtp] = useState('');
 
@@ -49,7 +51,9 @@ export const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [emailRole, setEmailRole] = useState<UserRole>('customer');
+
+  // Discrete Testing Mode Toggle (Accordion)
+  const [showDemoSection, setShowDemoSection] = useState(false);
 
   // Google Modal State for Expo Go development
   const [showGoogleModal, setShowGoogleModal] = useState(false);
@@ -71,7 +75,7 @@ export const LoginScreen: React.FC = () => {
       return;
     }
     setWaStep('otp');
-    setWaOtp('123456'); // Pre-filled OTP for smooth testing in Expo Go
+    setWaOtp('123456'); // Pre-fill OTP for smooth testing in Expo Go
   };
 
   const handleVerifyWaLogin = async () => {
@@ -81,25 +85,17 @@ export const LoginScreen: React.FC = () => {
       return;
     }
     try {
-      await signInWithWhatsApp(waPhone, waName, waRole);
+      await signInWithWhatsApp(waPhone, waName, 'customer');
     } catch {
       // Handled by context
     }
-  };
-
-  const handleSelectQuickWa = (phone: string, name: string, role: UserRole) => {
-    setWaPhone(phone);
-    setWaName(name);
-    setWaRole(role);
-    setWaStep('phone');
-    resetErrors();
   };
 
   // Email Handlers
   const handleEmailLogin = async () => {
     resetErrors();
     if (!email.trim() || !password) {
-      setLocalError('Harap isi email dan password.');
+      setLocalError('Harap isi email dan password Anda.');
       return;
     }
     try {
@@ -124,7 +120,7 @@ export const LoginScreen: React.FC = () => {
       return;
     }
     try {
-      await signUpWithEmail(emailName, email, password, emailRole);
+      await signUpWithEmail(emailName, email, password, 'customer');
     } catch {
       // Handled by context
     }
@@ -140,7 +136,7 @@ export const LoginScreen: React.FC = () => {
   const errorMessage = localError || authError;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}>
@@ -151,23 +147,29 @@ export const LoginScreen: React.FC = () => {
           
           {/* Header & Logo */}
           <View style={styles.hero}>
-            <View style={styles.logoContainer}>
-              <Ionicons name="cut" size={38} color={Colors.white} />
+            <View style={[styles.logoContainer, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border }]}>
+              <Image
+                source={require('../../assets/images/app-logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
-            <Text style={styles.appName}>AntriIn</Text>
-            <Text style={styles.tagline}>
-              Solusi booking antrean barbershop modern & cepat
+            <Text style={[styles.appName, { color: colors.text }]}>AntriIn</Text>
+            <Text style={[styles.tagline, { color: colors.textSecondary }]}>
+              Booking Jadwal & Antrean Barbershop Tanpa Menunggu
             </Text>
           </View>
 
-          {/* Main Card */}
-          <View style={styles.card}>
-            {/* Main Mode Switcher: WhatsApp vs Email */}
-            <View style={styles.mainTabContainer}>
+          {/* Main Auth Card */}
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* Primary Tab Selector */}
+            <View style={[styles.tabBar, { backgroundColor: isDark ? colors.surfaceVariant : '#F1F5F9' }]}>
               <TouchableOpacity
                 style={[
-                  styles.mainTabButton,
-                  activeTab === 'whatsapp' && styles.mainTabButtonActiveWa,
+                  styles.tabButton,
+                  activeTab === 'whatsapp' && {
+                    backgroundColor: colors.primary,
+                  },
                 ]}
                 onPress={() => {
                   setActiveTab('whatsapp');
@@ -176,22 +178,27 @@ export const LoginScreen: React.FC = () => {
                 activeOpacity={0.85}>
                 <Ionicons
                   name="logo-whatsapp"
-                  size={18}
-                  color={activeTab === 'whatsapp' ? Colors.white : '#25D366'}
+                  size={16}
+                  color={activeTab === 'whatsapp' ? colors.white : '#10B981'}
                 />
                 <Text
                   style={[
-                    styles.mainTabText,
-                    activeTab === 'whatsapp' && styles.mainTabTextActive,
+                    styles.tabButtonText,
+                    {
+                      color: activeTab === 'whatsapp' ? colors.white : colors.textSecondary,
+                      fontWeight: activeTab === 'whatsapp' ? '700' : '500',
+                    },
                   ]}>
-                  No. WhatsApp
+                  WhatsApp (Instan)
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.mainTabButton,
-                  activeTab === 'email' && styles.mainTabButtonActiveEmail,
+                  styles.tabButton,
+                  activeTab === 'email' && {
+                    backgroundColor: colors.primary,
+                  },
                 ]}
                 onPress={() => {
                   setActiveTab('email');
@@ -200,49 +207,45 @@ export const LoginScreen: React.FC = () => {
                 activeOpacity={0.85}>
                 <Ionicons
                   name="mail"
-                  size={18}
-                  color={activeTab === 'email' ? Colors.white : Colors.primary}
+                  size={16}
+                  color={activeTab === 'email' ? colors.white : colors.primary}
                 />
                 <Text
                   style={[
-                    styles.mainTabText,
-                    activeTab === 'email' && styles.mainTabTextActive,
+                    styles.tabButtonText,
+                    {
+                      color: activeTab === 'email' ? colors.white : colors.textSecondary,
+                      fontWeight: activeTab === 'email' ? '700' : '500',
+                    },
                   ]}>
                   Email & Sandi
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Error Message Box */}
-            {errorMessage ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={18} color={Colors.error} />
-                <Text style={styles.errorText}>{errorMessage}</Text>
+            {/* Error Message Notice */}
+            {errorMessage && (
+              <View style={[styles.errorBox, { backgroundColor: colors.errorLight, borderColor: colors.error }]}>
+                <Ionicons name="alert-circle" size={16} color={colors.error} />
+                <Text style={[styles.errorText, { color: colors.text }]}>{errorMessage}</Text>
               </View>
-            ) : null}
+            )}
 
-            {/* TAB CONTENT: WHATSAPP */}
+            {/* TAB: WHATSAPP */}
             {activeTab === 'whatsapp' && (
               <View>
-                <View style={styles.infoBanner}>
-                  <Ionicons name="flash" size={16} color="#047857" />
-                  <Text style={styles.infoBannerText}>
-                    Masuk instan tanpa perlu mengingat password!
-                  </Text>
-                </View>
-
                 {waStep === 'phone' ? (
                   <>
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Nomor WhatsApp</Text>
-                      <View style={styles.inputWrapper}>
-                        <View style={styles.phonePrefix}>
-                          <Text style={styles.phonePrefixText}>🇮🇩 +62</Text>
+                      <Text style={[styles.inputLabel, { color: colors.text }]}>Nomor WhatsApp</Text>
+                      <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <View style={[styles.phonePrefix, { borderRightColor: colors.border }]}>
+                          <Text style={[styles.phonePrefixText, { color: colors.text }]}>+62</Text>
                         </View>
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, { color: colors.text }]}
                           placeholder="81234567890"
-                          placeholderTextColor={Colors.textLight}
+                          placeholderTextColor={colors.textLight}
                           value={waPhone}
                           onChangeText={setWaPhone}
                           keyboardType="phone-pad"
@@ -251,20 +254,20 @@ export const LoginScreen: React.FC = () => {
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>
-                        Nama Anda (Opsional jika akun baru)
+                      <Text style={[styles.inputLabel, { color: colors.text }]}>
+                        Nama Anda <Text style={[styles.optionalTag, { color: colors.textSecondary }]}> (Opsional)</Text>
                       </Text>
-                      <View style={styles.inputWrapper}>
+                      <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
                         <Ionicons
                           name="person-outline"
                           size={18}
-                          color={Colors.textSecondary}
+                          color={colors.textSecondary}
                           style={styles.inputIcon}
                         />
                         <TextInput
-                          style={styles.input}
+                          style={[styles.input, { color: colors.text }]}
                           placeholder="Contoh: Budi Santoso"
-                          placeholderTextColor={Colors.textLight}
+                          placeholderTextColor={colors.textLight}
                           value={waName}
                           onChangeText={setWaName}
                           autoCapitalize="words"
@@ -272,108 +275,39 @@ export const LoginScreen: React.FC = () => {
                       </View>
                     </View>
 
-                    {/* Quick phone fillers from database */}
-                    <Text style={styles.quickLabel}>Nomor Pengujian Cepat:</Text>
-                    <View style={styles.quickPhoneRow}>
-                      <TouchableOpacity
-                        style={styles.quickPhoneChip}
-                        onPress={() =>
-                          handleSelectQuickWa('081234567890', 'Budi Santoso', 'customer')
-                        }>
-                        <Text style={styles.quickPhoneChipTitle}>0812-3456-7890</Text>
-                        <Text style={styles.quickPhoneChipSub}>Pelanggan</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.quickPhoneChip}
-                        onPress={() =>
-                          handleSelectQuickWa('081298765432', 'Mas Hendra', 'admin')
-                        }>
-                        <Text style={styles.quickPhoneChipTitle}>0812-9876-5432</Text>
-                        <Text style={styles.quickPhoneChipSub}>Admin</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Role Selection for testing */}
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Masuk Sebagai:</Text>
-                      <View style={styles.roleContainer}>
-                        <TouchableOpacity
-                          style={[
-                            styles.roleChip,
-                            waRole === 'customer' && styles.roleChipActive,
-                          ]}
-                          onPress={() => setWaRole('customer')}>
-                          <Ionicons
-                            name="person"
-                            size={16}
-                            color={waRole === 'customer' ? Colors.white : Colors.textSecondary}
-                          />
-                          <Text
-                            style={[
-                              styles.roleChipText,
-                              waRole === 'customer' && styles.roleChipTextActive,
-                            ]}>
-                            Pelanggan
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.roleChip,
-                            waRole === 'admin' && styles.roleChipActive,
-                          ]}
-                          onPress={() => setWaRole('admin')}>
-                          <Ionicons
-                            name="shield-checkmark"
-                            size={16}
-                            color={waRole === 'admin' ? Colors.white : Colors.textSecondary}
-                          />
-                          <Text
-                            style={[
-                              styles.roleChipText,
-                              waRole === 'admin' && styles.roleChipTextActive,
-                            ]}>
-                            Admin Barbershop
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
                     <Button
-                      title="Lanjut Masuk via WhatsApp"
+                      title="Kirim Kode OTP WhatsApp"
                       onPress={handleRequestWaOtp}
                       size="lg"
                       loading={isSigningIn}
-                      style={[styles.submitButton, { backgroundColor: '#10B981' }]}
+                      icon={<Ionicons name="paper-plane-outline" size={18} color={colors.white} />}
+                      style={{ marginTop: Spacing.xs, backgroundColor: '#10B981' }}
                     />
                   </>
                 ) : (
                   <>
-                    <View style={styles.otpHeader}>
-                      <Ionicons name="chatbubbles" size={32} color="#10B981" />
-                      <Text style={styles.otpTitle}>Verifikasi Kode OTP</Text>
-                      <Text style={styles.otpSubtitle}>
-                        Kode verifikasi telah dikirim ke nomor WhatsApp{' '}
-                        <Text style={{ fontWeight: '700', color: Colors.text }}>
-                          {waPhone}
-                        </Text>
+                    <View style={styles.otpHeaderWrap}>
+                      <View style={[styles.otpIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                        <Ionicons name="chatbubble-ellipses" size={28} color="#059669" />
+                      </View>
+                      <Text style={[styles.otpTitle, { color: colors.text }]}>Masukkan Kode OTP</Text>
+                      <Text style={[styles.otpSub, { color: colors.textSecondary }]}>
+                        Kode dikirim ke <Text style={{ fontWeight: '700', color: colors.text }}>{waPhone}</Text>
                       </Text>
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Kode OTP (6 Digit)</Text>
-                      <View style={styles.inputWrapper}>
+                      <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
                         <Ionicons
                           name="key-outline"
                           size={18}
-                          color={Colors.textSecondary}
+                          color={colors.textSecondary}
                           style={styles.inputIcon}
                         />
                         <TextInput
-                          style={[styles.input, { letterSpacing: 4, fontWeight: '700' }]}
+                          style={[styles.input, { color: colors.text, letterSpacing: 6, fontWeight: '700' }]}
                           placeholder="123456"
-                          placeholderTextColor={Colors.textLight}
+                          placeholderTextColor={colors.textLight}
                           value={waOtp}
                           onChangeText={setWaOtp}
                           keyboardType="number-pad"
@@ -382,87 +316,88 @@ export const LoginScreen: React.FC = () => {
                       </View>
                     </View>
 
-                    <View style={styles.otpNotice}>
-                      <Ionicons name="information-circle" size={16} color="#047857" />
-                      <Text style={styles.otpNoticeText}>
-                        Mode Pengujian Expo: Kode otomatis terisi `123456`.
-                      </Text>
-                    </View>
-
                     <Button
                       title="Verifikasi & Masuk"
                       onPress={handleVerifyWaLogin}
                       size="lg"
                       loading={isSigningIn}
-                      style={[styles.submitButton, { backgroundColor: '#10B981' }]}
+                      style={{ backgroundColor: '#10B981' }}
                     />
 
                     <TouchableOpacity
-                      style={styles.backButton}
+                      style={styles.changePhoneBtn}
                       onPress={() => setWaStep('phone')}>
-                      <Text style={styles.backButtonText}>← Ubah Nomor WhatsApp</Text>
+                      <Text style={[styles.changePhoneText, { color: colors.primary }]}>
+                        ← Ganti Nomor WhatsApp
+                      </Text>
                     </TouchableOpacity>
                   </>
                 )}
               </View>
             )}
 
-            {/* TAB CONTENT: EMAIL */}
+            {/* TAB: EMAIL */}
             {activeTab === 'email' && (
               <View>
-                {/* Switcher Masuk / Daftar */}
-                <View style={styles.subTabContainer}>
+                {/* Switcher Masuk vs Daftar */}
+                <View style={styles.subModeRow}>
                   <TouchableOpacity
-                    style={[
-                      styles.subTabButton,
-                      emailMode === 'login' && styles.subTabButtonActive,
-                    ]}
                     onPress={() => {
                       setEmailMode('login');
                       resetErrors();
-                    }}>
+                    }}
+                    style={[
+                      styles.subModeBtn,
+                      emailMode === 'login' && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
+                    ]}>
                     <Text
                       style={[
-                        styles.subTabText,
-                        emailMode === 'login' && styles.subTabTextActive,
+                        styles.subModeText,
+                        {
+                          color: emailMode === 'login' ? colors.primary : colors.textSecondary,
+                          fontWeight: emailMode === 'login' ? '700' : '500',
+                        },
                       ]}>
-                      Masuk
+                      Masuk Akun
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[
-                      styles.subTabButton,
-                      emailMode === 'register' && styles.subTabButtonActive,
-                    ]}
                     onPress={() => {
                       setEmailMode('register');
                       resetErrors();
-                    }}>
+                    }}
+                    style={[
+                      styles.subModeBtn,
+                      emailMode === 'register' && { borderBottomColor: colors.primary, borderBottomWidth: 2 },
+                    ]}>
                     <Text
                       style={[
-                        styles.subTabText,
-                        emailMode === 'register' && styles.subTabTextActive,
+                        styles.subModeText,
+                        {
+                          color: emailMode === 'register' ? colors.primary : colors.textSecondary,
+                          fontWeight: emailMode === 'register' ? '700' : '500',
+                        },
                       ]}>
-                      Daftar Akun Baru
+                      Daftar Baru
                     </Text>
                   </TouchableOpacity>
                 </View>
 
                 {emailMode === 'register' && (
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Nama Lengkap</Text>
-                    <View style={styles.inputWrapper}>
+                    <Text style={[styles.inputLabel, { color: colors.text }]}>Nama Lengkap</Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
                       <Ionicons
                         name="person-outline"
                         size={18}
-                        color={Colors.textSecondary}
+                        color={colors.textSecondary}
                         style={styles.inputIcon}
                       />
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, { color: colors.text }]}
                         placeholder="Contoh: Budi Santoso"
-                        placeholderTextColor={Colors.textLight}
+                        placeholderTextColor={colors.textLight}
                         value={emailName}
                         onChangeText={setEmailName}
                         autoCapitalize="words"
@@ -472,18 +407,18 @@ export const LoginScreen: React.FC = () => {
                 )}
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Email</Text>
-                  <View style={styles.inputWrapper}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Email</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
                     <Ionicons
                       name="mail-outline"
                       size={18}
-                      color={Colors.textSecondary}
+                      color={colors.textSecondary}
                       style={styles.inputIcon}
                     />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { color: colors.text }]}
                       placeholder="nama@email.com"
-                      placeholderTextColor={Colors.textLight}
+                      placeholderTextColor={colors.textLight}
                       value={email}
                       onChangeText={setEmail}
                       keyboardType="email-address"
@@ -494,20 +429,18 @@ export const LoginScreen: React.FC = () => {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Password</Text>
-                  <View style={styles.inputWrapper}>
+                  <Text style={[styles.inputLabel, { color: colors.text }]}>Kata Sandi</Text>
+                  <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
                     <Ionicons
                       name="lock-closed-outline"
                       size={18}
-                      color={Colors.textSecondary}
+                      color={colors.textSecondary}
                       style={styles.inputIcon}
                     />
                     <TextInput
-                      style={styles.input}
-                      placeholder={
-                        emailMode === 'register' ? 'Minimal 6 karakter' : 'Masukkan password'
-                      }
-                      placeholderTextColor={Colors.textLight}
+                      style={[styles.input, { color: colors.text }]}
+                      placeholder="Minimal 6 karakter"
+                      placeholderTextColor={colors.textLight}
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={!showPassword}
@@ -515,216 +448,148 @@ export const LoginScreen: React.FC = () => {
                     />
                     <TouchableOpacity
                       onPress={() => setShowPassword(!showPassword)}
-                      style={styles.eyeButton}>
+                      style={styles.eyeBtn}>
                       <Ionicons
                         name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                         size={18}
-                        color={Colors.textSecondary}
+                        color={colors.textSecondary}
                       />
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                {emailMode === 'register' && (
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Daftar Sebagai:</Text>
-                    <View style={styles.roleContainer}>
-                      <TouchableOpacity
-                        style={[
-                          styles.roleChip,
-                          emailRole === 'customer' && styles.roleChipActive,
-                        ]}
-                        onPress={() => setEmailRole('customer')}>
-                        <Ionicons
-                          name="person"
-                          size={16}
-                          color={emailRole === 'customer' ? Colors.white : Colors.textSecondary}
-                        />
-                        <Text
-                          style={[
-                            styles.roleChipText,
-                            emailRole === 'customer' && styles.roleChipTextActive,
-                          ]}>
-                          Pelanggan
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.roleChip,
-                          emailRole === 'admin' && styles.roleChipActive,
-                        ]}
-                        onPress={() => setEmailRole('admin')}>
-                        <Ionicons
-                          name="shield-checkmark"
-                          size={16}
-                          color={emailRole === 'admin' ? Colors.white : Colors.textSecondary}
-                        />
-                        <Text
-                          style={[
-                            styles.roleChipText,
-                            emailRole === 'admin' && styles.roleChipTextActive,
-                          ]}>
-                          Admin Barbershop
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-
                 <Button
-                  title={emailMode === 'login' ? 'Masuk dengan Email' : 'Daftar Sekarang'}
+                  title={emailMode === 'login' ? 'Masuk Sekarang' : 'Daftar Akun'}
                   onPress={emailMode === 'login' ? handleEmailLogin : handleEmailRegister}
                   size="lg"
                   loading={isSigningIn}
-                  style={styles.submitButton}
+                  style={{ marginTop: Spacing.xs }}
                 />
               </View>
             )}
 
             {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>ATAU MASUK DENGAN</Text>
-              <View style={styles.dividerLine} />
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              <Text style={[styles.dividerLabel, { color: colors.textSecondary }]}>ATAU</Text>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
             </View>
 
-            {/* Google Sign In Button */}
+            {/* Google Sign-in */}
             <TouchableOpacity
-              style={styles.googleCustomBtn}
+              style={[styles.googleBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
               onPress={() => setShowGoogleModal(true)}
               activeOpacity={0.85}>
-              <Ionicons name="logo-google" size={20} color="#EA4335" />
-              <Text style={styles.googleCustomBtnText}>Lanjut dengan Akun Google</Text>
+              <Ionicons name="logo-google" size={18} color="#EA4335" />
+              <Text style={[styles.googleBtnText, { color: colors.text }]}>Lanjut dengan Google</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Quick 1-Click Demo Accounts for Testing */}
-          <View style={styles.demoCard}>
-            <View style={styles.demoHeader}>
-              <Ionicons name="flask" size={18} color="#D97706" />
-              <Text style={styles.demoTitle}>Akses Cepat Pengujian (1-Klik)</Text>
-            </View>
-            <Text style={styles.demoSubtitle}>
-              Langsung masuk tanpa input form untuk mencoba semua fitur:
-            </Text>
+          {/* Collapsible Clean Demo / Testing Access */}
+          <View style={styles.testingSection}>
+            <TouchableOpacity
+              style={styles.testingHeader}
+              onPress={() => setShowDemoSection(!showDemoSection)}
+              activeOpacity={0.7}>
+              <Ionicons name="flask-outline" size={15} color={colors.textSecondary} />
+              <Text style={[styles.testingHeaderText, { color: colors.textSecondary }]}>
+                Akses Uji Coba Cepat (1-Klik)
+              </Text>
+              <Ionicons
+                name={showDemoSection ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
 
-            <View style={styles.demoButtonRow}>
-              <TouchableOpacity
-                style={[styles.demoQuickBtn, styles.demoCustomerBtn]}
-                onPress={() => loginAsDemo('customer')}
-                disabled={isSigningIn}
-                activeOpacity={0.85}>
-                <Ionicons name="person-circle-outline" size={24} color={Colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.demoBtnText}>Akun Pelanggan</Text>
-                  <Text style={styles.demoBtnSub}>Budi Santoso</Text>
-                </View>
-              </TouchableOpacity>
+            {showDemoSection && (
+              <View style={[styles.demoCard, { backgroundColor: isDark ? colors.surfaceVariant : '#F8FAFC', borderColor: colors.border }]}>
+                <Text style={[styles.demoDesc, { color: colors.textSecondary }]}>
+                  Pilih akun demo untuk langsung mencoba aplikasi tanpa registrasi manual:
+                </Text>
+                <View style={styles.demoButtonsRow}>
+                  <TouchableOpacity
+                    style={[styles.demoButton, { backgroundColor: colors.primaryBackground, borderColor: colors.primary }]}
+                    onPress={() => loginAsDemo('customer')}
+                    disabled={isSigningIn}>
+                    <Ionicons name="person" size={16} color={colors.primary} />
+                    <View>
+                      <Text style={[styles.demoBtnTitle, { color: colors.primaryDark }]}>Pelanggan</Text>
+                      <Text style={[styles.demoBtnSub, { color: colors.textSecondary }]}>Budi Santoso</Text>
+                    </View>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.demoQuickBtn, styles.demoAdminBtn]}
-                onPress={() => loginAsDemo('admin')}
-                disabled={isSigningIn}
-                activeOpacity={0.85}>
-                <Ionicons name="shield-outline" size={24} color="#059669" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.demoBtnText, { color: '#059669' }]}>
-                    Akun Admin
-                  </Text>
-                  <Text style={styles.demoBtnSub}>Mas Hendra</Text>
+                  <TouchableOpacity
+                    style={[styles.demoButton, { backgroundColor: '#ECFDF5', borderColor: '#10B981' }]}
+                    onPress={() => loginAsDemo('admin')}
+                    disabled={isSigningIn}>
+                    <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                    <View>
+                      <Text style={[styles.demoBtnTitle, { color: '#059669' }]}>Admin Barbershop</Text>
+                      <Text style={[styles.demoBtnSub, { color: colors.textSecondary }]}>Mas Hendra</Text>
+                    </View>
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-            </View>
+              </View>
+            )}
           </View>
 
-          <Text style={styles.footer}>
-            AntriIn • Sistem Pemesanan & Antrean Barbershop
+          <Text style={[styles.footerText, { color: colors.textLight }]}>
+            AntriIn • Sistem Booking & Antrean Barbershop
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Google Account Modal (for seamless Expo Go testing) */}
+      {/* Google Test Modal */}
       <Modal
         visible={showGoogleModal}
         transparent
         animationType="fade"
         onRequestClose={() => setShowGoogleModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
-              <View style={styles.modalIconWrap}>
-                <Ionicons name="logo-google" size={24} color="#EA4335" />
-              </View>
-              <Text style={styles.modalTitle}>Masuk dengan Google</Text>
-              <Text style={styles.modalDesc}>
-                Pilih akun Google pengujian untuk masuk di Expo Go:
-              </Text>
+              <Ionicons name="logo-google" size={24} color="#EA4335" />
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Masuk Akun Google</Text>
             </View>
+            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
+              Pilih akun Google simulasi untuk masuk di Expo Go:
+            </Text>
 
             <TouchableOpacity
-              style={styles.googleAccountItem}
+              style={[styles.googleAccountCard, { backgroundColor: colors.background, borderColor: colors.border }]}
               onPress={() =>
                 handleGoogleCustomLogin('budi.santoso@gmail.com', 'Budi Santoso (Google)')
               }>
-              <View style={styles.accountAvatar}>
-                <Text style={styles.avatarLetter}>B</Text>
+              <View style={[styles.googleAvatar, { backgroundColor: colors.primary }]}>
+                <Text style={styles.googleAvatarLetter}>B</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.accountName}>Budi Santoso</Text>
-                <Text style={styles.accountEmail}>budi.santoso@gmail.com</Text>
+                <Text style={[styles.accountName, { color: colors.text }]}>Budi Santoso (Pelanggan)</Text>
+                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>budi.santoso@gmail.com</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.googleAccountItem}
+              style={[styles.googleAccountCard, { backgroundColor: colors.background, borderColor: colors.border }]}
               onPress={() =>
                 handleGoogleCustomLogin('hendra.barber@gmail.com', 'Hendra Barbershop (Google)')
               }>
-              <View style={[styles.accountAvatar, { backgroundColor: '#10B981' }]}>
-                <Text style={styles.avatarLetter}>H</Text>
+              <View style={[styles.googleAvatar, { backgroundColor: '#10B981' }]}>
+                <Text style={styles.googleAvatarLetter}>H</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.accountName}>Hendra Barbershop</Text>
-                <Text style={styles.accountEmail}>hendra.barber@gmail.com</Text>
+                <Text style={[styles.accountName, { color: colors.text }]}>Hendra (Admin Barbershop)</Text>
+                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>hendra.barber@gmail.com</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+              <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
             </TouchableOpacity>
 
-            {/* Custom Google Email Input */}
-            <View style={{ marginTop: Spacing.sm }}>
-              <Text style={styles.inputLabel}>Atau Masukkan Email Google Lain:</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="nama.anda@gmail.com"
-                  placeholderTextColor={Colors.textLight}
-                  value={customGoogleEmail}
-                  onChangeText={setCustomGoogleEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              {customGoogleEmail.trim().length > 3 ? (
-                <Button
-                  title="Gunakan Akun Ini"
-                  onPress={() =>
-                    handleGoogleCustomLogin(
-                      customGoogleEmail.trim(),
-                      customGoogleEmail.split('@')[0]
-                    )
-                  }
-                  size="sm"
-                  style={{ marginTop: Spacing.xs }}
-                />
-              ) : null}
-            </View>
-
             <TouchableOpacity
-              style={styles.modalCloseButton}
+              style={styles.modalCancelBtn}
               onPress={() => setShowGoogleModal(false)}>
-              <Text style={styles.modalCloseText}>Batal</Text>
+              <Text style={[styles.modalCancelText, { color: colors.textSecondary }]}>Batal</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -736,7 +601,6 @@ export const LoginScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   flex: {
     flex: 1,
@@ -745,468 +609,308 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: Layout.screenPadding,
     paddingBottom: Spacing.xl,
+    justifyContent: 'center',
   },
   hero: {
     alignItems: 'center',
-    marginVertical: Spacing.md,
+    marginBottom: Spacing.lg,
+    marginTop: Spacing.sm,
   },
   logoContainer: {
-    width: 72,
-    height: 72,
+    width: 76,
+    height: 76,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.xs,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   appName: {
-    ...Typography.h1,
-    color: Colors.primaryDark,
     fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
   tagline: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
     textAlign: 'center',
+    paddingHorizontal: 20,
   },
   card: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 2,
   },
-  mainTabContainer: {
+  tabBar: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    borderRadius: Radius.lg,
+    padding: 4,
     marginBottom: Spacing.md,
   },
-  mainTabButton: {
+  tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceVariant,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  mainTabButtonActiveWa: {
-    backgroundColor: '#10B981',
-    borderColor: '#059669',
-  },
-  mainTabButtonActiveEmail: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primaryDark,
-  },
-  mainTabText: {
-    ...Typography.captionMedium,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-  },
-  mainTabTextActive: {
-    color: Colors.white,
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
-    backgroundColor: '#ECFDF5',
-    padding: Spacing.sm,
+    paddingVertical: 10,
     borderRadius: Radius.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
   },
-  infoBannerText: {
-    ...Typography.caption,
-    color: '#065F46',
-    fontWeight: '600',
-    flex: 1,
-  },
-  subTabContainer: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surfaceVariant,
-    borderRadius: Radius.md,
-    padding: 3,
-    marginBottom: Spacing.md,
-  },
-  subTabButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
-  subTabButtonActive: {
-    backgroundColor: Colors.white,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  subTabText: {
-    ...Typography.captionMedium,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  subTabTextActive: {
-    color: Colors.primary,
-    fontWeight: '700',
+  tabButtonText: {
+    fontSize: 12,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.errorLight,
+    gap: 8,
+    padding: 10,
     borderRadius: Radius.md,
-    padding: Spacing.md,
+    borderWidth: 1,
     marginBottom: Spacing.md,
-    gap: Spacing.sm,
   },
   errorText: {
-    ...Typography.caption,
-    color: Colors.error,
+    fontSize: 12,
     flex: 1,
-    fontWeight: '500',
   },
   inputGroup: {
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   inputLabel: {
-    ...Typography.caption,
-    color: Colors.text,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  optionalTag: {
+    fontSize: 11,
+    fontWeight: 'normal',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-    height: 46,
+    borderRadius: Radius.lg,
+    height: 48,
+    overflow: 'hidden',
   },
   phonePrefix: {
-    backgroundColor: Colors.surfaceVariant,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: Radius.sm,
-    marginRight: Spacing.sm,
+    paddingHorizontal: 12,
+    height: '100%',
+    justifyContent: 'center',
+    borderRightWidth: 1,
   },
   phonePrefixText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
-    color: Colors.text,
   },
   inputIcon: {
-    marginRight: Spacing.sm,
+    marginLeft: 12,
   },
   input: {
     flex: 1,
-    ...Typography.body,
-    color: Colors.text,
-    paddingVertical: 0,
+    height: '100%',
+    paddingHorizontal: 12,
     fontSize: 14,
   },
-  eyeButton: {
-    padding: 4,
+  eyeBtn: {
+    paddingHorizontal: 12,
   },
-  quickLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textLight,
-    marginTop: 2,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
-  quickPhoneRow: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
+  otpHeaderWrap: {
+    alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  quickPhoneChip: {
-    flex: 1,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: Radius.md,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  quickPhoneChipTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#15803D',
-  },
-  quickPhoneChipSub: {
-    fontSize: 10,
-    color: '#166534',
-  },
-  roleContainer: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: 2,
-  },
-  roleChip: {
-    flex: 1,
-    flexDirection: 'row',
+  otpIconCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    paddingHorizontal: 6,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.white,
-  },
-  roleChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  roleChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  roleChipTextActive: {
-    color: Colors.white,
-  },
-  submitButton: {
-    marginTop: Spacing.sm,
-  },
-  otpHeader: {
-    alignItems: 'center',
-    marginVertical: Spacing.md,
+    marginBottom: 6,
   },
   otpTitle: {
-    ...Typography.h4,
-    color: Colors.text,
-    marginTop: Spacing.xs,
+    fontSize: 16,
+    fontWeight: '700',
   },
-  otpSubtitle: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
+  otpSub: {
+    fontSize: 12,
+    marginTop: 2,
   },
-  otpNotice: {
+  changePhoneBtn: {
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+  changePhoneText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  subModeRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#ECFDF5',
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
-    marginVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: Spacing.md,
   },
-  otpNoticeText: {
-    ...Typography.small,
-    color: '#065F46',
-    fontWeight: '600',
+  subModeBtn: {
     flex: 1,
-  },
-  backButton: {
+    paddingVertical: 8,
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    marginTop: Spacing.xs,
   },
-  backButtonText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    fontWeight: '600',
+  subModeText: {
+    fontSize: 13,
   },
-  divider: {
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: Spacing.md,
-    gap: Spacing.sm,
+    gap: 10,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.border,
   },
-  dividerText: {
-    fontSize: 10,
+  dividerLabel: {
+    fontSize: 11,
     fontWeight: '700',
-    color: Colors.textLight,
     letterSpacing: 0.5,
   },
-  googleCustomBtn: {
+  googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.sm,
-    height: 48,
-    borderRadius: Radius.lg,
+    gap: 10,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: Colors.white,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderRadius: Radius.lg,
+    height: 48,
   },
-  googleCustomBtnText: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+  googleBtnText: {
+    fontSize: 14,
     fontWeight: '600',
   },
-  demoCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    marginTop: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+  testingSection: {
+    marginTop: Spacing.lg,
+    alignItems: 'center',
   },
-  demoHeader: {
+  testingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
-  demoTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#92400E',
+  testingHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  demoSubtitle: {
+  demoCard: {
+    width: '100%',
+    marginTop: Spacing.sm,
+    padding: 12,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+  },
+  demoDesc: {
     fontSize: 11,
-    color: '#B45309',
-    marginBottom: Spacing.sm,
+    marginBottom: 10,
   },
-  demoButtonRow: {
+  demoButtonsRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    gap: 8,
   },
-  demoQuickBtn: {
+  demoButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: 10,
-    paddingHorizontal: Spacing.sm,
+    gap: 8,
+    padding: 10,
     borderRadius: Radius.md,
     borderWidth: 1,
-    backgroundColor: Colors.white,
   },
-  demoCustomerBtn: {
-    borderColor: Colors.primaryLight,
-  },
-  demoAdminBtn: {
-    borderColor: '#A7F3D0',
-  },
-  demoBtnText: {
+  demoBtnTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.primary,
   },
   demoBtnSub: {
     fontSize: 10,
-    color: Colors.textSecondary,
   },
-  footer: {
-    ...Typography.caption,
-    color: Colors.textLight,
-    textAlign: 'center',
-    marginTop: Spacing.lg,
+  footerText: {
     fontSize: 11,
+    textAlign: 'center',
+    marginTop: Spacing.md,
   },
-  // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: Spacing.lg,
   },
-  modalContent: {
+  modalCard: {
     width: '100%',
-    backgroundColor: Colors.white,
     borderRadius: Radius.xl,
     padding: Spacing.lg,
+    borderWidth: 1,
   },
   modalHeader: {
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  modalIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xs,
-  },
-  modalTitle: {
-    ...Typography.h3,
-    color: Colors.text,
-  },
-  modalDesc: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  googleAccountItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.sm,
+    gap: 10,
+    marginBottom: 6,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalSub: {
+    fontSize: 12,
+    marginBottom: Spacing.md,
+  },
+  googleAccountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
+    marginBottom: 8,
   },
-  accountAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.primary,
+  googleAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarLetter: {
-    color: Colors.white,
+  googleAvatarLetter: {
+    color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 14,
   },
   accountName: {
-    ...Typography.captionMedium,
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.text,
   },
   accountEmail: {
-    ...Typography.small,
-    color: Colors.textSecondary,
+    fontSize: 11,
   },
-  modalCloseButton: {
-    marginTop: Spacing.md,
+  modalCancelBtn: {
     alignItems: 'center',
-    paddingVertical: Spacing.sm,
+    marginTop: Spacing.md,
   },
-  modalCloseText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
+  modalCancelText: {
+    fontSize: 13,
     fontWeight: '600',
   },
 });

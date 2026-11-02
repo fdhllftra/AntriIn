@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,19 +23,22 @@ import { Booking, BookingStatus } from '../../types';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
-import { Colors, Typography, Spacing, Layout, Radius } from '../../constants';
+import { Typography, Spacing, Layout, Radius } from '../../constants';
+import { useTheme } from '../../contexts/ThemeContext';
 import { getDateOptions, generateTimeSlots, TimeSlot } from '../../utils/dates';
-import { formatDateShort, formatRupiah } from '../../utils/format';
-
-const STATUS_OPTIONS: { label: string; value: BookingStatus; type: 'warning' | 'success' | 'error' }[] = [
-  { label: 'Menunggu', value: 'Menunggu', type: 'warning' },
-  { label: 'Selesai', value: 'Selesai', type: 'success' },
-  { label: 'Batal', value: 'Batal', type: 'error' },
-];
+import { formatDateShort, formatDateLong, formatRupiah, parseDateString } from '../../utils/format';
+import { openWhatsApp } from '../../utils/whatsapp';
 
 const DATE_OPTIONS = getDateOptions(7);
 
+const statusBadgeMap: Record<Booking['status'], 'warning' | 'success' | 'error'> = {
+  Menunggu: 'warning',
+  Selesai: 'success',
+  Batal: 'error',
+};
+
 export const DashboardScreen: React.FC = () => {
+  const { colors, isDark } = useTheme();
   const [selectedDate, setSelectedDate] = useState(DATE_OPTIONS[0].value);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
@@ -58,7 +61,7 @@ export const DashboardScreen: React.FC = () => {
         const blockedTimes = blockedData.map((b) => b.timeSlot);
         setSlots(generateTimeSlots([], blockedTimes));
       } catch (err) {
-        setError('Gagal memuat data dashboard.');
+        setError('Gagal memuat data antrean admin.');
         console.error(err);
       } finally {
         setLoading(false);
@@ -89,10 +92,14 @@ export const DashboardScreen: React.FC = () => {
     const label = status === 'Selesai' ? 'selesaikan' : 'batalkan';
     Alert.alert(
       `${status === 'Selesai' ? 'Selesaikan' : 'Batalkan'} Booking`,
-      `Yakin ingin ${label} booking ${booking.customerName} (${booking.timeSlot} WIB)?`,
+      `Yakin ingin ${label} antrean atas nama ${booking.customerName} (${booking.timeSlot} WIB)?`,
       [
-        { text: 'Batal', style: 'cancel' },
-        { text: 'Ya', style: status === 'Batal' ? 'destructive' : 'default', onPress: () => handleStatusChange(booking, status) },
+        { text: 'Kembali', style: 'cancel' },
+        {
+          text: status === 'Selesai' ? 'Ya, Selesai' : 'Ya, Batalkan',
+          style: status === 'Batal' ? 'destructive' : 'default',
+          onPress: () => handleStatusChange(booking, status),
+        },
       ]
     );
   };
@@ -106,7 +113,7 @@ export const DashboardScreen: React.FC = () => {
     if (isSlotBooked(selectedDate, slot.time)) {
       Alert.alert(
         'Slot Terisi',
-        'Slot ini memiliki booking aktif. Batalkan atau selesaikan booking terlebih dahulu.'
+        'Slot jam ini memiliki booking aktif. Selesaikan atau batalkan booking terlebih dahulu.'
       );
       return;
     }
@@ -116,12 +123,12 @@ export const DashboardScreen: React.FC = () => {
       const target = blockedSlot.find((b) => b.timeSlot === slot.time);
       if (target) {
         Alert.alert(
-          'Buka Slot',
-          `Yakin ingin membuka kembali slot ${slot.time}?`,
+          'Buka Slot Jam',
+          `Buka kembali slot jam ${slot.time} agar dapat dipesan pelanggan?`,
           [
             { text: 'Batal', style: 'cancel' },
             {
-              text: 'Buka',
+              text: 'Buka Slot',
               onPress: async () => {
                 try {
                   await unblockSlot(target.id);
@@ -136,12 +143,12 @@ export const DashboardScreen: React.FC = () => {
       }
     } else {
       Alert.alert(
-        'Tutup Slot',
-        `Tutup slot ${slot.time} agar pelanggan tidak dapat booking?`,
+        'Tutup Slot Jam (Istirahat/Tutup)',
+        `Tutup slot jam ${slot.time} agar tidak dapat dipilih oleh pelanggan?`,
         [
           { text: 'Batal', style: 'cancel' },
           {
-            text: 'Tutup',
+            text: 'Tutup Slot',
             onPress: async () => {
               try {
                 await blockSlot(selectedDate, slot.time);
@@ -156,80 +163,29 @@ export const DashboardScreen: React.FC = () => {
     }
   };
 
-  const renderBookings = () => {
-    const active = bookings.filter((b) => b.status === 'Menunggu');
-    const finished = bookings.filter((b) => b.status !== 'Menunggu');
-
-    return (
-      <>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Antrean Hari Ini</Text>
-          <Badge label={`${active.length} menunggu`} type="warning" />
-        </View>
-        {bookings.length === 0 ? (
-          <Card>
-            <Text style={styles.emptyText}>Belum ada booking pada tanggal ini.</Text>
-          </Card>
-        ) : null}
-
-        {active.map((booking) => (
-          <BookingCard
-            key={booking.id}
-            booking={booking}
-            onSelesai={() => confirmStatusChange(booking, 'Selesai')}
-            onBatal={() => confirmStatusChange(booking, 'Batal')}
-          />
-        ))}
-
-        {finished.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Riwayat Tanggal Ini</Text>
-            </View>
-            {finished.map((booking) => (
-              <BookingCard key={booking.id} booking={booking} />
-            ))}
-          </>
-        ) : null}
-      </>
-    );
-  };
-
-  const renderSlotManager = () => (
-    <View style={styles.slotSection}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Kelola Slot</Text>
-        <Text style={styles.slotHint}>Tap untuk tutup/buka slot</Text>
-      </View>
-      <View style={styles.slotGrid}>
-        {slots.map((slot, index) => {
-          const booked = isSlotBooked(selectedDate, slot.time);
-          const style = [
-            styles.slot,
-            slot.blocked && styles.slotBlocked,
-            booked && styles.slotBooked,
-          ];
-          return (
-            <TouchableOpacity
-              key={index}
-              style={style}
-              disabled={booked}
-              onPress={() => handleToggleSlot(slot)}>
-              <Text style={styles.slotTime}>{slot.time}</Text>
-              <Text style={styles.slotStatus}>
-                {slot.blocked ? 'Ditutup' : booked ? 'Terisi' : 'Buka'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
+  // Metrics Calculation
+  const activeBookings = useMemo(
+    () => bookings.filter((b) => b.status === 'Menunggu'),
+    [bookings]
+  );
+  const finishedBookings = useMemo(
+    () => bookings.filter((b) => b.status === 'Selesai'),
+    [bookings]
+  );
+  const totalRevenue = useMemo(
+    () => finishedBookings.reduce((sum, b) => sum + b.totalPrice, 0),
+    [finishedBookings]
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.screenTitle}>Dashboard Admin</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      {/* Admin Header */}
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <View>
+          <Text style={[styles.screenTitle, { color: colors.text }]}>Dashboard Barbershop</Text>
+          <Text style={[styles.screenSub, { color: colors.textSecondary }]}>Kelola antrean dan ketersediaan slot</Text>
+        </View>
+        <Badge label="Admin Mode" type="primary" />
       </View>
 
       <ScrollView
@@ -238,120 +194,279 @@ export const DashboardScreen: React.FC = () => {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
             onRefresh={() => {
               setRefreshing(true);
               loadData(selectedDate);
             }}
           />
         }>
+        {/* Date Selector */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.dateList}>
-          {DATE_OPTIONS.map((option) => {
-            const selected = option.value === selectedDate;
+          {DATE_OPTIONS.map((option, idx) => {
+            const isSelected = option.value === selectedDate;
+            const isToday = idx === 0;
+
             return (
               <TouchableOpacity
                 key={option.value}
                 onPress={() => setSelectedDate(option.value)}
-                style={[styles.dateChip, selected && styles.dateChipSelected]}>
+                style={[
+                  styles.dateChip,
+                  {
+                    backgroundColor: isSelected
+                      ? colors.primary
+                      : isDark
+                      ? colors.surfaceVariant
+                      : colors.surface,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                  },
+                ]}
+                activeOpacity={0.8}>
                 <Text
                   style={[
-                    styles.dateChipLabel,
-                    selected && styles.dateChipLabelSelected,
+                    styles.dateChipDay,
+                    { color: isSelected ? colors.white : colors.textSecondary },
                   ]}>
-                  {option.label}
+                  {isToday ? 'Hari Ini' : option.label.split(',')[0]}
+                </Text>
+                <Text
+                  style={[
+                    styles.dateChipNum,
+                    { color: isSelected ? colors.white : colors.text },
+                  ]}>
+                  {option.label.split(',')[1]?.trim() || option.label}
                 </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Button title="Coba Lagi" onPress={() => loadData(selectedDate)} size="sm" />
+        {/* Daily Metrics Row */}
+        <View style={styles.metricsGrid}>
+          <View style={[styles.metricBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.metricIconWrap}>
+              <Ionicons name="time" size={18} color="#D97706" />
+            </View>
+            <Text style={[styles.metricNumber, { color: colors.text }]}>{activeBookings.length}</Text>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Menunggu</Text>
           </View>
-        ) : loading ? (
+
+          <View style={[styles.metricBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.metricIconWrap, { backgroundColor: '#DCFCE7' }]}>
+              <Ionicons name="checkmark-done" size={18} color="#059669" />
+            </View>
+            <Text style={[styles.metricNumber, { color: colors.text }]}>{finishedBookings.length}</Text>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Selesai</Text>
+          </View>
+
+          <View style={[styles.metricBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.metricIconWrap, { backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF' }]}>
+              <Ionicons name="cash-outline" size={18} color={colors.primary} />
+            </View>
+            <Text style={[styles.metricNumber, { color: colors.primaryDark, fontSize: 13 }]}>
+              {formatRupiah(totalRevenue)}
+            </Text>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>Omzet Selesai</Text>
+          </View>
+        </View>
+
+        {/* ACTIVE BOOKINGS SECTION */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Antrean Menunggu</Text>
+          <Badge label={`${activeBookings.length} pelanggan`} type="warning" />
+        </View>
+
+        {loading && !refreshing ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Memuat dashboard...</Text>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memuat antrean...</Text>
           </View>
+        ) : activeBookings.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Ionicons name="checkmark-circle-outline" size={40} color={colors.success} />
+            <Text style={[styles.emptyCardTitle, { color: colors.text }]}>Tidak Ada Antrean Menunggu</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              Semua booking pada tanggal ini sudah dilayani atau belum ada yang memesan.
+            </Text>
+          </Card>
         ) : (
+          activeBookings.map((booking) => (
+            <Card key={booking.id} style={styles.adminBookingCard}>
+              <View style={styles.bookingTopRow}>
+                <View style={[styles.timePill, { backgroundColor: colors.primaryBackground }]}>
+                  <Ionicons name="time" size={14} color={colors.primary} />
+                  <Text style={[styles.timePillText, { color: colors.primaryDark }]}>{booking.timeSlot} WIB</Text>
+                </View>
+                <Badge label={booking.status} type="warning" />
+              </View>
+
+              <View style={styles.customerRow}>
+                <View style={[styles.avatarCircle, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.avatarInitials}>
+                    {booking.customerName.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.customerNameText, { color: colors.text }]}>{booking.customerName}</Text>
+                  <Text style={[styles.barberTagText, { color: colors.textSecondary }]}>
+                    Kapster: <Text style={{ fontWeight: '700', color: colors.text }}>{booking.barberName}</Text>
+                  </Text>
+                  <Text style={[styles.servicesSubText, { color: colors.textSecondary }]}>
+                    {booking.services.map((s) => s.name).join(' • ')}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.priceRow, { borderTopColor: colors.border }]}>
+                <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>Total Biaya</Text>
+                <Text style={[styles.priceValue, { color: colors.primaryDark }]}>{formatRupiah(booking.totalPrice)}</Text>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.adminActionRow}>
+                <Button
+                  title="WhatsApp"
+                  variant="outline"
+                  size="sm"
+                  icon={<Ionicons name="logo-whatsapp" size={15} color={colors.primary} />}
+                  onPress={() =>
+                    openWhatsApp(
+                      `Halo Bapak/Kak ${booking.customerName}, kami dari Edi Barbershop ingin menginformasikan antrean pangkas jam ${booking.timeSlot} WIB Anda segera dimulai. Mohon dapat bersiap.`
+                    )
+                  }
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Selesaikan"
+                  variant="secondary"
+                  size="sm"
+                  icon={<Ionicons name="checkmark" size={15} color={colors.white} />}
+                  onPress={() => confirmStatusChange(booking, 'Selesai')}
+                  style={{ flex: 1.2 }}
+                />
+                <Button
+                  title="Batal"
+                  variant="danger"
+                  size="sm"
+                  onPress={() => confirmStatusChange(booking, 'Batal')}
+                  style={{ flex: 0.8 }}
+                />
+              </View>
+            </Card>
+          ))
+        )}
+
+        {/* FINISHED BOOKINGS SECTION */}
+        {finishedBookings.length > 0 && (
           <>
-            {renderBookings()}
-            {renderSlotManager()}
+            <View style={[styles.sectionHeader, { marginTop: Spacing.lg }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Riwayat Hari Ini (Selesai)</Text>
+              <Badge label={`${finishedBookings.length} selesai`} type="success" />
+            </View>
+
+            {finishedBookings.map((booking) => (
+              <Card key={booking.id} style={styles.historyMiniCard}>
+                <View style={styles.historyRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.historyName, { color: colors.text }]}>
+                      {booking.customerName} ({booking.timeSlot} WIB)
+                    </Text>
+                    <Text style={[styles.historyDetail, { color: colors.textSecondary }]}>
+                      {booking.barberName} • {booking.services.map((s) => s.name).join(', ')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.historyPrice, { color: colors.success }]}>
+                    {formatRupiah(booking.totalPrice)}
+                  </Text>
+                </View>
+              </Card>
+            ))}
           </>
         )}
+
+        {/* SLOT MANAGER SECTION */}
+        <View style={[styles.sectionHeader, { marginTop: Spacing.xl }]}>
+          <View>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Kelola Slot Jam</Text>
+            <Text style={[styles.screenSub, { color: colors.textSecondary }]}>
+              Tap slot untuk menutup (istirahat/tutup) atau membuka kembali
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.slotGrid}>
+          {slots.map((slot, index) => {
+            const booked = isSlotBooked(selectedDate, slot.time);
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.slotChip,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                  slot.blocked && {
+                    backgroundColor: isDark ? '#451A03' : '#FEF3C7',
+                    borderColor: '#F59E0B',
+                  },
+                  booked && {
+                    backgroundColor: isDark ? '#1E293B' : '#E2E8F0',
+                    borderColor: colors.border,
+                    opacity: 0.7,
+                  },
+                ]}
+                disabled={booked}
+                onPress={() => handleToggleSlot(slot)}
+                activeOpacity={0.75}>
+                <Text style={[styles.slotTimeText, { color: colors.text }]}>{slot.time}</Text>
+                <Text
+                  style={[
+                    styles.slotStatusText,
+                    {
+                      color: slot.blocked
+                        ? '#B45309'
+                        : booked
+                        ? colors.textSecondary
+                        : colors.success,
+                    },
+                  ]}>
+                  {slot.blocked ? 'Ditutup' : booked ? 'Terisi' : 'Buka'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-interface BookingCardProps {
-  booking: Booking;
-  onSelesai?: () => void;
-  onBatal?: () => void;
-}
-
-const statusBadgeMap: Record<Booking['status'], 'warning' | 'success' | 'error'> = {
-  Menunggu: 'warning',
-  Selesai: 'success',
-  Batal: 'error',
-};
-
-const BookingCard: React.FC<BookingCardProps> = ({ booking, onSelesai, onBatal }) => (
-  <Card>
-    <View style={styles.badgeRow}>
-      <Badge label={booking.status} type={statusBadgeMap[booking.status]} />
-      <Text style={styles.bookingTime}>{booking.timeSlot} WIB</Text>
-    </View>
-    <View style={styles.customerRow}>
-      <View style={styles.customerAvatar}>
-        <Ionicons name="person" size={18} color={Colors.white} />
-      </View>
-      <View style={styles.customerInfo}>
-        <Text style={styles.customerName}>{booking.customerName}</Text>
-        <Text style={styles.customerDetail}>
-          {booking.barberName} - {booking.services.map((s) => s.name).join(', ')}
-        </Text>
-      </View>
-    </View>
-    <View style={styles.priceRow}>
-      <Text style={styles.priceLabel}>Total</Text>
-      <Text style={styles.priceValue}>{formatRupiah(booking.totalPrice)}</Text>
-    </View>
-    {booking.status === 'Menunggu' && onSelesai && onBatal ? (
-      <View style={styles.actionRow}>
-        <View style={styles.actionGrow}>
-          <Button
-            title="Selesai"
-            variant="secondary"
-            size="sm"
-            onPress={onSelesai}
-          />
-        </View>
-        <View style={styles.actionGrow}>
-          <Button title="Batal" variant="danger" size="sm" onPress={onBatal} />
-        </View>
-      </View>
-    ) : null}
-  </Card>
-);
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Layout.screenPadding,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
   },
   screenTitle: {
-    ...Typography.h2,
-    color: Colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  screenSub: {
+    fontSize: 12,
+    marginTop: 2,
   },
   content: {
     padding: Layout.screenPadding,
@@ -362,159 +477,197 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginTop: Spacing.sm,
+    fontSize: 13,
+    marginTop: 8,
   },
   dateList: {
-    gap: Spacing.sm,
+    gap: 8,
     paddingBottom: Spacing.md,
   },
   dateChip: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    width: 82,
+    paddingVertical: 10,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.surfaceVariant,
     borderWidth: 1,
-    borderColor: Colors.border,
+    alignItems: 'center',
   },
-  dateChipSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+  dateChipDay: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 2,
   },
-  dateChipLabel: {
-    ...Typography.captionMedium,
-    color: Colors.textSecondary,
+  dateChipNum: {
+    fontSize: 13,
+    fontWeight: '800',
   },
-  dateChipLabelSelected: {
-    color: Colors.white,
+  metricsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: Spacing.md,
+  },
+  metricBox: {
+    flex: 1,
+    padding: 12,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  metricIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  metricNumber: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  metricLabel: {
+    fontSize: 11,
+    textAlign: 'center',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Spacing.md,
     marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   sectionTitle: {
-    ...Typography.h4,
-    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  emptyCard: {
+    padding: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  emptyCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   emptyText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
+    fontSize: 12,
     textAlign: 'center',
-    paddingVertical: Spacing.sm,
   },
-  badgeRow: {
+  adminBookingCard: {
+    padding: 14,
+    marginBottom: 10,
+  },
+  bookingTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 10,
   },
-  bookingTime: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+  timePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: Radius.full,
+  },
+  timePillText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
   customerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    gap: 12,
+    marginBottom: 10,
   },
-  customerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
   },
-  customerInfo: {
-    flex: 1,
+  avatarInitials: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 16,
   },
-  customerName: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+  customerNameText: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
   },
-  customerDetail: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
+  barberTagText: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  servicesSubText: {
+    fontSize: 12,
   },
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: Spacing.sm,
+    alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    marginBottom: Spacing.sm,
+    paddingTop: 8,
+    marginBottom: 10,
   },
   priceLabel: {
-    ...Typography.body,
-    color: Colors.textSecondary,
+    fontSize: 13,
   },
   priceValue: {
-    ...Typography.bodyMedium,
-    color: Colors.primaryDark,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  actionRow: {
+  adminActionRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    gap: 8,
   },
-  actionGrow: {
-    flex: 1,
+  historyMiniCard: {
+    padding: 12,
+    marginBottom: 8,
   },
-  slotSection: {
-    marginTop: Spacing.lg,
+  historyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  slotHint: {
-    ...Typography.caption,
-    color: Colors.textLight,
+  historyName: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  historyDetail: {
+    fontSize: 11,
+  },
+  historyPrice: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   slotGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.sm,
+    gap: 8,
+    marginTop: Spacing.xs,
   },
-  slot: {
+  slotChip: {
     width: '31%',
-    paddingVertical: Spacing.sm,
+    paddingVertical: 10,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surfaceVariant,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 1.5,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  slotBlocked: {
-    backgroundColor: Colors.warningLight,
-    borderColor: '#FCD34D',
+  slotTimeText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
-  slotBooked: {
-    backgroundColor: Colors.errorLight,
-    borderColor: '#FCA5A5',
-    opacity: 0.8,
-  },
-  slotTime: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
-  },
-  slotStatus: {
-    ...Typography.small,
-    color: Colors.textLight,
+  slotStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
     marginTop: 2,
-  },
-  errorBox: {
-    marginTop: Spacing.md,
-    backgroundColor: Colors.errorLight,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  errorText: {
-    ...Typography.body,
-    color: Colors.text,
   },
 });

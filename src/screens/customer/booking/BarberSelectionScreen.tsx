@@ -12,12 +12,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { getBarbers } from '../../../services/firestore';
+import { getBarbers, getReviewsByBarber } from '../../../services/firestore';
 import { Barber } from '../../../types';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
-import { Colors, Typography, Spacing, Layout, Radius } from '../../../constants';
+import { BookingStepIndicator } from '../../../components/BookingStepIndicator';
+import { Typography, Spacing, Layout, Radius } from '../../../constants';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { formatRupiah } from '../../../utils/format';
 
 type NavigationProp = NativeStackNavigationProp<
@@ -29,14 +31,19 @@ type RoutePropType = RouteProp<BookingStackParamList, 'BarberSelection'>;
 export const BarberSelectionScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RoutePropType>();
+  const { colors, isDark } = useTheme();
   const { services } = route.params;
 
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [barberRatings, setBarberRatings] = useState<
+    Record<string, { average: number; count: number }>
+  >({});
   const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const totalPrice = services.reduce((sum, s) => sum + s.price, 0);
+  const totalDuration = services.reduce((sum, s) => sum + s.durationMinutes, 0);
 
   const loadBarbers = useCallback(async () => {
     setLoading(true);
@@ -44,6 +51,23 @@ export const BarberSelectionScreen: React.FC = () => {
     try {
       const data = await getBarbers();
       setBarbers(data);
+
+      const ratingResults = await Promise.all(
+        data.map(async (barber) => {
+          const reviews = await getReviewsByBarber(barber.id);
+          const total = reviews.reduce((sum, rev) => sum + rev.rating, 0);
+          return {
+            barberId: barber.id,
+            average: reviews.length ? total / reviews.length : 5.0,
+            count: reviews.length,
+          };
+        })
+      );
+      const ratingMap: Record<string, { average: number; count: number }> = {};
+      ratingResults.forEach((r) => {
+        ratingMap[r.barberId] = { average: r.average, count: r.count };
+      });
+      setBarberRatings(ratingMap);
     } catch (err) {
       setError('Gagal memuat daftar kapster. Periksa koneksi Anda.');
       console.error(err);
@@ -58,18 +82,18 @@ export const BarberSelectionScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Memuat kapster...</Text>
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memuat kapster...</Text>
       </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.center}>
-        <Ionicons name="cloud-offline-outline" size={48} color={Colors.textLight} />
-        <Text style={styles.errorText}>{error}</Text>
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+        <Ionicons name="cloud-offline-outline" size={48} color={colors.textLight} />
+        <Text style={[styles.errorText, { color: colors.textSecondary }]}>{error}</Text>
         <Button title="Coba Lagi" onPress={loadBarbers} />
       </SafeAreaView>
     );
@@ -78,59 +102,86 @@ export const BarberSelectionScreen: React.FC = () => {
   const selectedBarber = barbers.find((b) => b.id === selectedBarberId);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      {/* Stepper UX */}
+      <BookingStepIndicator currentStep={2} />
+
       <FlatList
         data={barbers}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <View style={styles.summaryBox}>
-            <Text style={styles.summaryTitle}>Layanan dipilih</Text>
-            {services.map((s) => (
-              <View key={s.id} style={styles.summaryRow}>
-                <Text style={styles.summaryService}>{s.name}</Text>
-                <Text style={styles.summaryPrice}>{formatRupiah(s.price)}</Text>
+          <View>
+            {/* Selected Services Mini Summary */}
+            <View style={[styles.summaryBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.summaryTopRow}>
+                <Text style={[styles.summaryTitle, { color: colors.textSecondary }]}>Layanan Dipilih</Text>
+                <Text style={[styles.summaryTotalValue, { color: colors.primaryDark }]}>{formatRupiah(totalPrice)}</Text>
               </View>
-            ))}
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryTotal}>Total</Text>
-              <Text style={styles.summaryTotalValue}>{formatRupiah(totalPrice)}</Text>
+              <Text style={[styles.summaryServiceList, { color: colors.text }]}>
+                {services.map((s) => s.name).join(' • ')} (~{totalDuration} menit)
+              </Text>
+            </View>
+
+            <View style={styles.headerInfo}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>Pilih Kapster</Text>
+              <Text style={[styles.instruction, { color: colors.textSecondary }]}>
+                Pilih kapster yang akan melayani potongan rambut Anda
+              </Text>
             </View>
           </View>
         }
         renderItem={({ item }) => {
           const selected = selectedBarberId === item.id;
+          const rating = barberRatings[item.id];
+
           return (
             <TouchableOpacity
               onPress={() => setSelectedBarberId(item.id)}
-              activeOpacity={0.8}>
+              activeOpacity={0.85}>
               <Card
                 style={[
                   styles.barberCard,
-                  selected ? styles.barberCardSelected : null,
+                  selected
+                    ? {
+                        borderColor: colors.primary,
+                        backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF',
+                      }
+                    : null,
                 ]}>
-                {item.photoURL ? (
-                  <Image source={{ uri: item.photoURL }} style={styles.avatar} />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Ionicons name="person" size={24} color={Colors.white} />
-                  </View>
-                )}
-                <View style={styles.barberInfo}>
-                  <Text style={styles.barberName}>{item.name}</Text>
-                  {item.specialty ? (
-                    <Text style={styles.barberSpecialty}>{item.specialty}</Text>
-                  ) : null}
+                <View style={[styles.avatarWrap, { backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF' }]}>
+                  {item.photoURL ? (
+                    <Image source={{ uri: item.photoURL }} style={styles.avatar} />
+                  ) : (
+                    <Ionicons name="person" size={26} color={colors.primary} />
+                  )}
                 </View>
+
+                <View style={styles.barberInfo}>
+                  <Text style={[styles.barberName, { color: colors.text }]}>{item.name}</Text>
+                  <Text style={[styles.barberSpecialty, { color: colors.textSecondary }]}>
+                    {item.specialty || 'General Stylist'}
+                  </Text>
+                  <View style={styles.ratingRow}>
+                    <Ionicons name="star" size={13} color="#F59E0B" />
+                    <Text style={[styles.ratingText, { color: colors.text }]}>
+                      {rating?.average ? rating.average.toFixed(1) : '5.0'}
+                    </Text>
+                    <Text style={[styles.ratingCount, { color: colors.textLight }]}>
+                      ({rating?.count || 0} ulasan)
+                    </Text>
+                  </View>
+                </View>
+
                 <View
                   style={[
                     styles.radio,
-                    selected && styles.radioSelected,
+                    { borderColor: colors.border },
+                    selected && { borderColor: colors.primary, backgroundColor: colors.primary },
                   ]}>
-                  {selected ? (
-                    <View style={styles.radioDot} />
-                  ) : null}
+                  {selected && (
+                    <Ionicons name="checkmark" size={14} color={colors.white} />
+                  )}
                 </View>
               </Card>
             </TouchableOpacity>
@@ -138,18 +189,21 @@ export const BarberSelectionScreen: React.FC = () => {
         }}
         ListEmptyComponent={
           <View style={styles.center}>
-            <Text style={styles.errorText}>
+            <Text style={[styles.errorText, { color: colors.textSecondary }]}>
               Belum ada kapster aktif. Hubungi admin barbershop.
             </Text>
           </View>
         }
       />
 
-      <View style={styles.footer}>
+      {/* Sticky Bottom Next Button */}
+      <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
         <Button
-          title="Lanjut"
+          title={selectedBarber ? `Lanjut Jadwal bersama ${selectedBarber.name}` : 'Pilih Kapster Terlebih Dahulu'}
           size="lg"
           disabled={!selectedBarberId}
+          iconPosition="right"
+          icon={<Ionicons name="arrow-forward" size={18} color={colors.white} />}
           onPress={() => {
             if (selectedBarber) {
               navigation.navigate('DateTimeSelection', {
@@ -167,23 +221,19 @@ export const BarberSelectionScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
-    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: Layout.screenPadding,
   },
   loadingText: {
     ...Typography.body,
-    color: Colors.textSecondary,
     marginTop: Spacing.md,
   },
   errorText: {
     ...Typography.body,
-    color: Colors.textSecondary,
     textAlign: 'center',
     marginVertical: Spacing.md,
   },
@@ -192,103 +242,96 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
   },
   summaryBox: {
-    backgroundColor: Colors.surface,
+    padding: 12,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    marginBottom: Spacing.md,
   },
-  summaryTitle: {
-    ...Typography.captionMedium,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
-  },
-  summaryRow: {
+  summaryTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginVertical: 2,
+    alignItems: 'center',
+    marginBottom: 4,
   },
-  summaryService: {
-    ...Typography.body,
-    color: Colors.text,
-  },
-  summaryPrice: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.sm,
-  },
-  summaryTotal: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+  summaryTitle: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   summaryTotalValue: {
-    ...Typography.bodyMedium,
-    color: Colors.primaryDark,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  summaryServiceList: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  headerInfo: {
+    marginBottom: Spacing.md,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  instruction: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   barberCard: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
+    padding: 14,
+    marginBottom: 10,
   },
-  barberCardSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: '#EFF6FF',
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceVariant,
-  },
-  avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.primary,
+  avatarWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
   },
   barberInfo: {
     flex: 1,
     marginLeft: Spacing.md,
   },
   barberName: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   barberSpecialty: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  ratingCount: {
+    fontSize: 11,
   },
   radio: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.full,
     borderWidth: 2,
-    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  radioSelected: {
-    borderColor: Colors.primary,
-  },
-  radioDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.primary,
   },
   footer: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
   },
 });

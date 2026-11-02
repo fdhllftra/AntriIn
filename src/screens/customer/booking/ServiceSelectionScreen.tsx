@@ -16,7 +16,9 @@ import { Service } from '../../../types';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
-import { Colors, Typography, Spacing, Layout, Radius } from '../../../constants';
+import { BookingStepIndicator } from '../../../components/BookingStepIndicator';
+import { Typography, Spacing, Layout, Radius } from '../../../constants';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { formatRupiah } from '../../../utils/format';
 
 type NavigationProp = NativeStackNavigationProp<
@@ -26,6 +28,7 @@ type NavigationProp = NativeStackNavigationProp<
 
 export const ServiceSelectionScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const { colors, isDark } = useTheme();
   const [services, setServices] = useState<Service[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,70 +60,84 @@ export const ServiceSelectionScreen: React.FC = () => {
 
   const selectedServices = services.filter((s) => selectedIds.includes(s.id));
   const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
+  const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Memuat layanan...</Text>
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memuat katalog layanan...</Text>
       </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.center}>
-        <Ionicons name="cloud-offline-outline" size={48} color={Colors.textLight} />
-        <Text style={styles.errorText}>{error}</Text>
+      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
+        <Ionicons name="cloud-offline-outline" size={48} color={colors.textLight} />
+        <Text style={[styles.errorText, { color: colors.textSecondary }]}>{error}</Text>
         <Button title="Coba Lagi" onPress={loadServices} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      {/* Stepper UX */}
+      <BookingStepIndicator currentStep={1} />
+
       <FlatList
         data={services}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
-          <Text style={styles.instruction}>
-            Pilih satu atau beberapa layanan yang Anda inginkan
-          </Text>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Pilih Layanan</Text>
+            <Text style={[styles.instruction, { color: colors.textSecondary }]}>
+              Anda dapat memilih lebih dari satu layanan (misal: Potong + Cuci Rambut)
+            </Text>
+          </View>
         }
         renderItem={({ item }) => {
           const selected = selectedIds.includes(item.id);
           return (
             <TouchableOpacity
               onPress={() => toggleService(item.id)}
-              activeOpacity={0.8}>
+              activeOpacity={0.85}>
               <Card
                 style={[
                   styles.serviceCard,
-                  selected ? styles.serviceCardSelected : null,
+                  selected
+                    ? {
+                        borderColor: colors.primary,
+                        backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF',
+                      }
+                    : null,
                 ]}>
                 <View style={styles.serviceInfo}>
-                  <Text style={styles.serviceName}>{item.name}</Text>
-                  <Text style={styles.serviceDesc}>{item.description}</Text>
+                  <Text style={[styles.serviceName, { color: colors.text }]}>{item.name}</Text>
+                  <Text style={[styles.serviceDesc, { color: colors.textSecondary }]}>{item.description}</Text>
                   <View style={styles.serviceMeta}>
-                    <Text style={styles.servicePrice}>
+                    <Text style={[styles.servicePrice, { color: colors.primaryDark }]}>
                       {formatRupiah(item.price)}
                     </Text>
-                    <Text style={styles.serviceDuration}>
-                      {item.durationMinutes} menit
-                    </Text>
+                    <View style={styles.durationPill}>
+                      <Ionicons name="time-outline" size={13} color={colors.textLight} />
+                      <Text style={[styles.serviceDuration, { color: colors.textSecondary }]}>
+                        ~{item.durationMinutes} menit
+                      </Text>
+                    </View>
                   </View>
                 </View>
                 <View
                   style={[
                     styles.checkbox,
-                    selected && styles.checkboxSelected,
+                    { borderColor: colors.border, backgroundColor: colors.surface },
+                    selected && { backgroundColor: colors.primary, borderColor: colors.primary },
                   ]}>
-                  <Ionicons
-                    name="checkmark"
-                    size={18}
-                    color={Colors.white}
-                  />
+                  {selected && (
+                    <Ionicons name="checkmark" size={16} color={colors.white} />
+                  )}
                 </View>
               </Card>
             </TouchableOpacity>
@@ -128,22 +145,34 @@ export const ServiceSelectionScreen: React.FC = () => {
         }}
         ListEmptyComponent={
           <View style={styles.center}>
-            <Text style={styles.errorText}>
+            <Text style={[styles.errorText, { color: colors.textSecondary }]}>
               Belum ada layanan tersedia. Hubungi admin barbershop.
             </Text>
           </View>
         }
       />
 
-      <View style={styles.footer}>
+      {/* Sticky Bottom Summary Footer */}
+      <View style={[styles.footer, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Total</Text>
-          <Text style={styles.totalValue}>{formatRupiah(totalPrice)}</Text>
+          <View>
+            <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
+              {selectedIds.length} Layanan Dipilih
+            </Text>
+            {totalDuration > 0 && (
+              <Text style={[styles.totalDurationText, { color: colors.textLight }]}>
+                Estimasi waktu: ~{totalDuration} menit
+              </Text>
+            )}
+          </View>
+          <Text style={[styles.totalValue, { color: colors.primaryDark }]}>{formatRupiah(totalPrice)}</Text>
         </View>
         <Button
-          title="Lanjut"
+          title={selectedIds.length === 0 ? 'Pilih Layanan Terlebih Dahulu' : 'Lanjut Pilih Kapster'}
           size="lg"
           disabled={selectedIds.length === 0}
+          iconPosition="right"
+          icon={<Ionicons name="arrow-forward" size={18} color={colors.white} />}
           onPress={() =>
             navigation.navigate('BarberSelection', {
               services: selectedServices,
@@ -158,91 +187,89 @@ export const ServiceSelectionScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
-    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: Layout.screenPadding,
   },
   loadingText: {
     ...Typography.body,
-    color: Colors.textSecondary,
     marginTop: Spacing.md,
   },
   errorText: {
     ...Typography.body,
-    color: Colors.textSecondary,
     textAlign: 'center',
     marginVertical: Spacing.md,
+  },
+  headerInfo: {
+    marginBottom: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  instruction: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   listContent: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.xl,
   },
-  instruction: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-  },
   serviceCard: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-  },
-  serviceCardSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: '#EFF6FF',
+    padding: 14,
+    marginBottom: 10,
   },
   serviceInfo: {
     flex: 1,
   },
   serviceName: {
-    ...Typography.h4,
-    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   serviceDesc: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 6,
   },
   serviceMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.sm,
-    gap: Spacing.md,
+    gap: 10,
   },
   servicePrice: {
-    ...Typography.bodyMedium,
-    color: Colors.primaryDark,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  durationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   serviceDuration: {
-    ...Typography.caption,
-    color: Colors.textLight,
+    fontSize: 12,
   },
   checkbox: {
     width: 26,
     height: 26,
-    borderRadius: 13,
+    borderRadius: Radius.full,
     borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: Spacing.md,
-  },
-  checkboxSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
   },
   footer: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.background,
   },
   totalRow: {
     flexDirection: 'row',
@@ -251,11 +278,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   totalLabel: {
-    ...Typography.body,
-    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  totalDurationText: {
+    fontSize: 11,
+    marginTop: 2,
   },
   totalValue: {
-    ...Typography.h3,
-    color: Colors.primaryDark,
+    fontSize: 20,
+    fontWeight: '800',
   },
 });

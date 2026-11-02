@@ -5,6 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   Share,
+  Image,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,9 +15,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import QRCode from 'react-native-qrcode-svg';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
-import { Card } from '../../../components/Card';
 import { Badge } from '../../../components/Badge';
-import { Colors, Typography, Spacing, Layout, Radius } from '../../../constants';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { Typography, Spacing, Layout, Radius } from '../../../constants';
 import { formatRupiah, parseDateString, formatDateLong } from '../../../utils/format';
 import { openWhatsApp } from '../../../utils/whatsapp';
 
@@ -25,6 +27,7 @@ type RoutePropType = RouteProp<BookingStackParamList, 'ETicket'>;
 export const ETicketScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RoutePropType>();
+  const { colors, isDark } = useTheme();
   const { booking } = route.params;
 
   const dateObj = parseDateString(booking.date);
@@ -45,99 +48,144 @@ export const ETicketScreen: React.FC = () => {
     }
   };
 
+  const goToHome = () => {
+    // Navigate to root tab "Home"
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.navigate('Home' as never);
+    } else {
+      navigation.reset({ index: 0, routes: [{ name: 'ServiceSelection' }] });
+    }
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.checkmarkCircle}>
-          <Ionicons name="checkmark" size={44} color={Colors.white} />
+        {/* Success Icon */}
+        <View style={[styles.checkmarkCircle, { backgroundColor: colors.success }]}>
+          <Ionicons name="checkmark" size={38} color={colors.white} />
         </View>
-        <Text style={styles.title}>Booking Berhasil!</Text>
-        <Text style={styles.subtitle}>
-          Simpan atau tunjukkan E-Ticket ini kepada kasir saat datang.
+        <Text style={[styles.title, { color: colors.text }]}>Booking Berhasil!</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          E-Ticket Anda telah diterbitkan. Tunjukkan kepada kasir saat tiba di barbershop.
         </Text>
 
-        <View style={styles.ticketCard}>
+        {/* Ticket Container */}
+        <View
+          style={[
+            styles.ticketCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}>
           <View style={styles.ticketTop}>
             <View style={styles.ticketHeader}>
-              <Text style={styles.ticketBrand}>AntriIn E-Ticket</Text>
+              <View style={styles.brandContainer}>
+                <Image
+                  source={require('../../../assets/images/app-logo.png')}
+                  style={styles.ticketLogo}
+                  resizeMode="contain"
+                />
+                <View>
+                  <Text style={[styles.ticketBrand, { color: colors.text }]}>AntriIn</Text>
+                  <Text style={[styles.ticketShop, { color: colors.textSecondary }]}>Edi Barbershop</Text>
+                </View>
+              </View>
               <Badge label={booking.status} type="warning" />
             </View>
+
             <View style={styles.qrBox}>
-              <QRCode
-                value={qrValue}
-                size={180}
-                color={Colors.text}
-                backgroundColor={Colors.white}
-              />
-            </View>
-            <Text style={styles.ticketId}>ID Booking: {booking.id}</Text>
-          </View>
-
-          <View style={styles.ticketDivider}>
-            <View style={styles.notchLeft} />
-            <View style={styles.dividerLine} />
-            <View style={styles.notchRight} />
-          </View>
-
-          <View style={styles.ticketBody}>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Kapster</Text>
-              <Text style={styles.rowValue}>{booking.barberName}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Tanggal</Text>
-              <Text style={styles.rowValue}>{formatDateLong(dateObj)}</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Jam</Text>
-              <Text style={styles.rowValue}>{booking.timeSlot} WIB</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Nama</Text>
-              <Text style={styles.rowValue}>{booking.customerName}</Text>
-            </View>
-          </View>
-
-          <View style={styles.ticketFooter}>
-            <Text style={styles.footerLabel}>Layanan</Text>
-            {booking.services.map((s) => (
-              <View key={s.id} style={styles.row}>
-                <Text style={styles.rowLabel}>{s.name}</Text>
-                <Text style={styles.rowValue}>{formatRupiah(s.price)}</Text>
+              <View style={styles.qrInner}>
+                <QRCode
+                  value={qrValue}
+                  size={160}
+                  color="#0F172A"
+                  backgroundColor="#FFFFFF"
+                />
               </View>
-            ))}
-            <View style={styles.rowTotal}>
-              <Text style={styles.rowTotalLabel}>Total</Text>
-              <Text style={styles.rowTotalValue}>{formatRupiah(booking.totalPrice)}</Text>
+              <Text style={[styles.qrScanHint, { color: colors.textSecondary }]}>
+                Pindai di kasir untuk verifikasi antrean
+              </Text>
+              <Text style={[styles.ticketId, { color: colors.textLight }]}>
+                ID: {booking.id}
+              </Text>
+            </View>
+          </View>
+
+          {/* Notch Divider */}
+          <View style={styles.ticketDivider}>
+            <View style={[styles.notch, styles.notchLeft, { backgroundColor: colors.background }]} />
+            <View style={[styles.dividerDashed, { borderColor: colors.border }]} />
+            <View style={[styles.notch, styles.notchRight, { backgroundColor: colors.background }]} />
+          </View>
+
+          {/* Ticket Body */}
+          <View style={styles.ticketBody}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoCol}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>KAPSTER</Text>
+                <Text style={[styles.infoVal, { color: colors.text }]}>{booking.barberName}</Text>
+              </View>
+              <View style={styles.infoCol}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>WAKTU</Text>
+                <Text style={[styles.infoValHighlight, { color: colors.primaryDark }]}>{booking.timeSlot} WIB</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoCol}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>TANGGAL</Text>
+                <Text style={[styles.infoVal, { color: colors.text }]}>{formatDateLong(dateObj)}</Text>
+              </View>
+              <View style={styles.infoCol}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>NAMA PELANGGAN</Text>
+                <Text style={[styles.infoVal, { color: colors.text }]}>{booking.customerName}</Text>
+              </View>
+            </View>
+
+            <View style={[styles.servicesBreakdown, { borderTopColor: colors.border }]}>
+              <Text style={[styles.servicesLabel, { color: colors.textSecondary }]}>LAYANAN</Text>
+              {booking.services.map((s) => (
+                <View key={s.id} style={styles.serviceItem}>
+                  <Text style={[styles.serviceName, { color: colors.text }]}>{s.name}</Text>
+                  <Text style={[styles.servicePrice, { color: colors.textSecondary }]}>{formatRupiah(s.price)}</Text>
+                </View>
+              ))}
+              <View style={[styles.totalLine, { borderTopColor: colors.border }]}>
+                <Text style={[styles.totalLabel, { color: colors.text }]}>Total Biaya</Text>
+                <Text style={[styles.totalValue, { color: colors.primaryDark }]}>{formatRupiah(booking.totalPrice)}</Text>
+              </View>
             </View>
           </View>
         </View>
 
+        {/* Action Buttons */}
         <View style={styles.actions}>
           <Button
-            title="Hubungi Admin via WhatsApp"
+            title="Bagikan E-Ticket"
+            variant="outline"
+            icon={<Ionicons name="share-social-outline" size={18} color={colors.primary} />}
+            onPress={handleShare}
+          />
+          <Button
+            title="Hubungi Barbershop (WhatsApp)"
             variant="secondary"
+            icon={<Ionicons name="logo-whatsapp" size={18} color={colors.white} />}
             onPress={() =>
               openWhatsApp(
-                `Halo AntriIn, saya ${booking.customerName}. Saya ingin konfirmasi/menanyakan booking: ${booking.id} (${booking.services
-                  .map((s) => s.name)
-                  .join(', ')}, ${formatDateLong(
+                `Halo Edi Barbershop, saya telah booking tiket #${booking.id} (${booking.barberName}, ${formatDateLong(
                   dateObj
                 )} ${booking.timeSlot} WIB).`
               )
             }
           />
           <Button
-            title="Bagikan E-Ticket"
-            variant="outline"
-            onPress={handleShare}
-          />
-          <Button
-            title="Selesai"
+            title="Kembali ke Beranda"
             size="lg"
-            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'ServiceSelection' }] })}
+            onPress={goToHome}
           />
         </View>
       </ScrollView>
@@ -148,40 +196,37 @@ export const ETicketScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     padding: Layout.screenPadding,
     paddingBottom: Spacing.xl,
   },
   checkmarkCircle: {
-    width: 72,
-    height: 72,
+    width: 64,
+    height: 64,
     borderRadius: Radius.full,
-    backgroundColor: Colors.success,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-    marginBottom: Spacing.md,
-    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   title: {
-    ...Typography.h3,
-    color: Colors.text,
+    fontSize: 22,
+    fontWeight: '800',
     textAlign: 'center',
   },
   subtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
+    fontSize: 13,
     textAlign: 'center',
     marginBottom: Spacing.lg,
-    marginTop: Spacing.xs,
+    marginTop: 4,
+    lineHeight: 18,
+    paddingHorizontal: 16,
   },
   ticketCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     borderWidth: 1,
-    borderColor: Colors.border,
     overflow: 'hidden',
   },
   ticketTop: {
@@ -193,93 +238,138 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  brandContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ticketLogo: {
+    width: 36,
+    height: 36,
   },
   ticketBrand: {
-    ...Typography.h4,
-    color: Colors.primaryDark,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  ticketShop: {
+    fontSize: 11,
   },
   qrBox: {
-    padding: Spacing.md,
-    backgroundColor: Colors.white,
+    alignItems: 'center',
+    marginVertical: Spacing.sm,
+  },
+  qrInner: {
+    padding: 12,
+    backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  qrScanHint: {
+    fontSize: 12,
+    marginTop: 10,
+    textAlign: 'center',
   },
   ticketId: {
-    ...Typography.captionMedium,
-    color: Colors.textSecondary,
-    marginTop: Spacing.md,
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    marginTop: 4,
   },
   ticketDivider: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 24,
+    overflow: 'hidden',
+  },
+  notch: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   notchLeft: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.background,
-    marginLeft: -10,
+    marginLeft: -12,
   },
   notchRight: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.background,
-    marginRight: -10,
+    marginRight: -12,
   },
-  dividerLine: {
+  dividerDashed: {
     flex: 1,
     height: 1,
-    borderStyle: 'dashed',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderStyle: 'dashed',
   },
   ticketBody: {
     padding: Spacing.lg,
-  },
-  ticketFooter: {
-    padding: Spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 4,
-    gap: Spacing.md,
-  },
-  rowLabel: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-  },
-  rowValue: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
-  },
-  rowTotal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.md,
     paddingTop: Spacing.sm,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+  },
+  infoCol: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  infoVal: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  infoValHighlight: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  servicesBreakdown: {
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    paddingTop: Spacing.sm,
+    marginTop: 4,
   },
-  rowTotalLabel: {
-    ...Typography.bodyMedium,
-    color: Colors.text,
+  servicesLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 6,
   },
-  rowTotalValue: {
-    ...Typography.bodyMedium,
-    color: Colors.primaryDark,
+  serviceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  serviceName: {
+    fontSize: 13,
+  },
+  servicePrice: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  totalLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    paddingTop: 8,
+    marginTop: 6,
+  },
+  totalLabel: {
+    fontSize: 14,
     fontWeight: '700',
   },
-  footerLabel: {
-    ...Typography.captionMedium,
-    color: Colors.textLight,
-    marginBottom: Spacing.xs,
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '800',
   },
   actions: {
     marginTop: Spacing.lg,
-    gap: Spacing.sm,
+    gap: 10,
   },
 });

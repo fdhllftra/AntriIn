@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Colors } from '../constants';
+import { useTheme } from '../contexts/ThemeContext';
 
 type StatusType = 'primary' | 'success' | 'warning' | 'error' | 'neutral';
 
@@ -10,19 +10,45 @@ interface BadgeProps {
   style?: ViewStyle;
 }
 
-const typeColors: Record<StatusType, { bg: string; fg: string }> = {
-  primary: { bg: Colors.primaryLight, fg: Colors.primaryDark },
-  success: { bg: Colors.successLight, fg: Colors.secondaryDark },
-  warning: { bg: Colors.warningLight, fg: '#B45309' },
-  error: { bg: Colors.errorLight, fg: '#B91C1C' },
-  neutral: { bg: Colors.surfaceVariant, fg: Colors.textSecondary },
-};
-
 export const Badge: React.FC<BadgeProps> = ({ label, type = 'neutral', style }) => {
-  const colors = typeColors[type];
+  const { colors, isDark } = useTheme();
+
+  const getTypeColors = (): { bg: string; fg: string } => {
+    switch (type) {
+      case 'primary':
+        return {
+          bg: colors.primaryLight,
+          fg: isDark ? '#93C5FD' : colors.primaryDark,
+        };
+      case 'success':
+        return {
+          bg: colors.successLight,
+          fg: isDark ? '#86EFAC' : colors.secondaryDark,
+        };
+      case 'warning':
+        return {
+          bg: colors.warningLight,
+          fg: isDark ? '#FCD34D' : '#B45309',
+        };
+      case 'error':
+        return {
+          bg: colors.errorLight,
+          fg: isDark ? '#FCA5A5' : '#B91C1C',
+        };
+      case 'neutral':
+      default:
+        return {
+          bg: colors.surfaceVariant,
+          fg: colors.textSecondary,
+        };
+    }
+  };
+
+  const badgeColors = getTypeColors();
+
   return (
-    <View style={[styles.badge, { backgroundColor: colors.bg }, style]}>
-      <Text style={[styles.label, { color: colors.fg }]}>{label}</Text>
+    <View style={[styles.badge, { backgroundColor: badgeColors.bg }, style]}>
+      <Text style={[styles.label, { color: badgeColors.fg }]}>{label}</Text>
     </View>
   );
 };

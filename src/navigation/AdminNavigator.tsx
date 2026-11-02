@@ -5,12 +5,13 @@ import { ServicesScreen } from '../screens/admin/ServicesScreen';
 import { BarbersScreen } from '../screens/admin/BarbersScreen';
 import { ProfileScreen } from '../screens/customer/ProfileScreen';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants';
+import { useTheme } from '../contexts/ThemeContext';
 
-const TabIcon: React.FC<{ label: string; focused: boolean }> = ({
-  label,
-  focused,
-}) => {
+const TabIcon: React.FC<{
+  label: string;
+  focused: boolean;
+  color: string;
+}> = ({ label, focused, color }) => {
   const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
     Dashboard: focused ? 'grid' : 'grid-outline',
     Services: focused ? 'cut' : 'cut-outline',
@@ -21,21 +22,27 @@ const TabIcon: React.FC<{ label: string; focused: boolean }> = ({
     <Ionicons
       name={iconMap[label] ?? 'ellipse'}
       size={22}
-      color={focused ? Colors.primary : Colors.textLight}
+      color={color}
     />
   );
 };
 
 export const AdminNavigator: React.FC = () => {
+  const { colors } = useTheme();
+
   return (
     <AdminTabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarIcon: ({ focused }) => (
-          <TabIcon label={route.name} focused={focused} />
+        tabBarIcon: ({ focused, color }) => (
+          <TabIcon label={route.name} focused={focused} color={color} />
         ),
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textLight,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textLight,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
       })}>
       <AdminTabs.Screen name="Dashboard" component={DashboardScreen} />
       <AdminTabs.Screen name="Services" component={ServicesScreen} />

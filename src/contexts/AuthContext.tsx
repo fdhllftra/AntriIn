@@ -22,6 +22,7 @@ import { auth } from '../services/firebase';
 import {
   createUserProfile,
   getUserProfile,
+  updateUserProfile,
 } from '../services/firestore';
 import {
   findLocalUserByPhone,
@@ -69,6 +70,7 @@ interface AuthContextType {
   signInWithGoogle: (customAccount?: { email: string; name: string }) => Promise<void>;
   loginAsDemo: (role: UserRole) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfilePhoto: (photoURL: string | null) => Promise<void>;
   clearAuthError: () => void;
 }
 
@@ -540,6 +542,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const updateProfilePhoto = async (photoURL: string | null): Promise<void> => {
+    if (!user) return;
+    try {
+      const cleanPhoto = photoURL && photoURL.trim().length > 0 ? photoURL : null;
+
+      const updatedUser: AppUser = {
+        uid: user.uid,
+        displayName: user.displayName || null,
+        email: user.email || null,
+        phone: (user as any).phone || null,
+        photoURL: cleanPhoto,
+      };
+
+      const updatedProfile: UserProfile = profile
+        ? {
+            ...profile,
+            photoURL: cleanPhoto || undefined,
+          }
+        : {
+            uid: user.uid,
+            name: user.displayName || 'Pengguna',
+            email: user.email || '',
+            role: 'customer',
+            photoURL: cleanPhoto || undefined,
+          };
+
+      // Persist to local database and Firestore
+      await updateUserProfile(user.uid, {
+        photoURL: cleanPhoto || '',
+      });
+
+      // Persist to session storage
+      await AsyncStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ user: updatedUser, profile: updatedProfile })
+      );
+
+      // Update Firebase Auth if logged in via Firebase
+      if (auth && auth.currentUser) {
+        await updateFirebaseProfile(auth.currentUser, {
+          photoURL: cleanPhoto || '',
+        }).catch(() => {});
+      }
+
+      setUser(updatedUser);
+      setProfile(updatedProfile);
+    } catch (error) {
+      console.error('Error updating profile photo:', error);
+      throw error;
+    }
+  };
+
   const clearAuthError = () => setAuthError(null);
 
   const isAdmin = profile?.role === 'admin';
@@ -559,6 +613,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         signInWithGoogle,
         loginAsDemo,
         signOut,
+        updateProfilePhoto,
         clearAuthError,
       }}>
       {children}

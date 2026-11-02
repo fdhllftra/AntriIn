@@ -27,6 +27,16 @@ const COLLECTIONS = {
   reviews: 'reviews',
 };
 
+const cleanFirestoreData = (obj: Record<string, any>): Record<string, any> => {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+  return result;
+};
+
 export const createUserProfile = async (
   uid: string,
   profile: Omit<UserProfile, 'uid'>
@@ -37,10 +47,11 @@ export const createUserProfile = async (
   const database = getDb();
   if (database) {
     try {
-      await setDoc(doc(database, COLLECTIONS.users, uid), {
+      const dataToSave = cleanFirestoreData({
         ...profile,
         createdAt: Date.now(),
       });
+      await setDoc(doc(database, COLLECTIONS.users, uid), dataToSave);
     } catch (err) {
       console.warn('[Firestore] Failed to save profile to remote, kept locally:', err);
     }
@@ -55,7 +66,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const remoteData = { uid: docSnap.id, ...docSnap.data() } as UserProfile;
-        await localDb.saveLocalUserProfile(uid, remoteData).catch(() => {});
+        await localDb.saveLocalUserProfile(uid, remoteData).catch(() => { });
         return remoteData;
       }
     } catch (err) {
@@ -73,7 +84,8 @@ export const updateUserProfile = async (
   const database = getDb();
   if (database) {
     try {
-      await updateDoc(doc(database, COLLECTIONS.users, uid), data);
+      const cleanedData = cleanFirestoreData(data as Record<string, any>);
+      await setDoc(doc(database, COLLECTIONS.users, uid), cleanedData, { merge: true });
     } catch (err) {
       console.warn('[Firestore] Failed remote updateUserProfile:', err);
     }
