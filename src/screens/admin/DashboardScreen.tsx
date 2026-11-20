@@ -278,7 +278,11 @@ export const DashboardScreen: React.FC = () => {
         {/* ACTIVE BOOKINGS SECTION */}
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Antrean Menunggu</Text>
-          <Badge label={`${activeBookings.length} pelanggan`} type="warning" />
+          <Badge
+            label={`${activeBookings.length} pelanggan`}
+            type="warning"
+            pulse={activeBookings.length > 0}
+          />
         </View>
 
         {loading && !refreshing ? (
@@ -296,13 +300,13 @@ export const DashboardScreen: React.FC = () => {
           </Card>
         ) : (
           activeBookings.map((booking) => (
-            <Card key={booking.id} style={styles.adminBookingCard}>
+            <Card key={booking.id} style={styles.adminBookingCard} hoverable>
               <View style={styles.bookingTopRow}>
                 <View style={[styles.timePill, { backgroundColor: colors.primaryBackground }]}>
                   <Ionicons name="time" size={14} color={colors.primary} />
                   <Text style={[styles.timePillText, { color: colors.primaryDark }]}>{booking.timeSlot} WIB</Text>
                 </View>
-                <Badge label={booking.status} type="warning" />
+                <Badge label={booking.status} type="warning" pulse />
               </View>
 
               <View style={styles.customerRow}>
@@ -370,7 +374,7 @@ export const DashboardScreen: React.FC = () => {
             </View>
 
             {finishedBookings.map((booking) => (
-              <Card key={booking.id} style={styles.historyMiniCard}>
+              <Card key={booking.id} style={styles.historyMiniCard} hoverable>
                 <View style={styles.historyRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.historyName, { color: colors.text }]}>

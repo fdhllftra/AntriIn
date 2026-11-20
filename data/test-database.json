@@ -29,6 +29,13 @@
       "email": "deni.pratama@gmail.com",
       "phone": "081377889900",
       "role": "customer"
+    },
+    {
+      "uid": "admin-wa-83832848640",
+      "name": "Admin Barbershop (WhatsApp)",
+      "email": "admin.whatsapp@antriin.com",
+      "phone": "083832848640",
+      "role": "admin"
     }
   ],
   "services": [

@@ -17,6 +17,7 @@ import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
 import { BookingStepIndicator } from '../../../components/BookingStepIndicator';
+import { SelectionScreenSkeleton } from '../../../components/Skeleton';
 import { Typography, Spacing, Layout, Radius } from '../../../constants';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { formatRupiah } from '../../../utils/format';
@@ -64,9 +65,9 @@ export const ServiceSelectionScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memuat katalog layanan...</Text>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <BookingStepIndicator currentStep={1} />
+        <SelectionScreenSkeleton count={4} />
       </SafeAreaView>
     );
   }
@@ -101,46 +102,37 @@ export const ServiceSelectionScreen: React.FC = () => {
         renderItem={({ item }) => {
           const selected = selectedIds.includes(item.id);
           return (
-            <TouchableOpacity
+            <Card
+              style={styles.serviceCard}
               onPress={() => toggleService(item.id)}
-              activeOpacity={0.85}>
-              <Card
-                style={[
-                  styles.serviceCard,
-                  selected
-                    ? {
-                        borderColor: colors.primary,
-                        backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF',
-                      }
-                    : null,
-                ]}>
-                <View style={styles.serviceInfo}>
-                  <Text style={[styles.serviceName, { color: colors.text }]}>{item.name}</Text>
-                  <Text style={[styles.serviceDesc, { color: colors.textSecondary }]}>{item.description}</Text>
-                  <View style={styles.serviceMeta}>
-                    <Text style={[styles.servicePrice, { color: colors.primaryDark }]}>
-                      {formatRupiah(item.price)}
+              hoverable
+              selected={selected}>
+              <View style={styles.serviceInfo}>
+                <Text style={[styles.serviceName, { color: colors.text }]}>{item.name}</Text>
+                <Text style={[styles.serviceDesc, { color: colors.textSecondary }]}>{item.description}</Text>
+                <View style={styles.serviceMeta}>
+                  <Text style={[styles.servicePrice, { color: colors.primaryDark }]}>
+                    {formatRupiah(item.price)}
+                  </Text>
+                  <View style={styles.durationPill}>
+                    <Ionicons name="time-outline" size={13} color={colors.textLight} />
+                    <Text style={[styles.serviceDuration, { color: colors.textSecondary }]}>
+                      ~{item.durationMinutes} menit
                     </Text>
-                    <View style={styles.durationPill}>
-                      <Ionicons name="time-outline" size={13} color={colors.textLight} />
-                      <Text style={[styles.serviceDuration, { color: colors.textSecondary }]}>
-                        ~{item.durationMinutes} menit
-                      </Text>
-                    </View>
                   </View>
                 </View>
-                <View
-                  style={[
-                    styles.checkbox,
-                    { borderColor: colors.border, backgroundColor: colors.surface },
-                    selected && { backgroundColor: colors.primary, borderColor: colors.primary },
-                  ]}>
-                  {selected && (
-                    <Ionicons name="checkmark" size={16} color={colors.white} />
-                  )}
-                </View>
-              </Card>
-            </TouchableOpacity>
+              </View>
+              <View
+                style={[
+                  styles.checkbox,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                  selected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}>
+                {selected && (
+                  <Ionicons name="checkmark" size={16} color={colors.white} />
+                )}
+              </View>
+            </Card>
           );
         }}
         ListEmptyComponent={

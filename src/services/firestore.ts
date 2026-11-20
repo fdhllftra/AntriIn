@@ -51,7 +51,7 @@ export const createUserProfile = async (
         ...profile,
         createdAt: Date.now(),
       });
-      await setDoc(doc(database, COLLECTIONS.users, uid), dataToSave);
+      await setDoc(doc(database, COLLECTIONS.users, uid), dataToSave, { merge: true });
     } catch (err) {
       console.warn('[Firestore] Failed to save profile to remote, kept locally:', err);
     }
@@ -68,6 +68,12 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
         const remoteData = { uid: docSnap.id, ...docSnap.data() } as UserProfile;
         await localDb.saveLocalUserProfile(uid, remoteData).catch(() => { });
         return remoteData;
+      }
+      // Jika profil belum ada di Firestore tapi ada di local DB, sinkronkan ke Firestore
+      const localData = await localDb.getLocalUserProfile(uid);
+      if (localData) {
+        await setDoc(docRef, cleanFirestoreData(localData), { merge: true }).catch(() => { });
+        return localData;
       }
     } catch (err) {
       console.warn('[Firestore] Remote getUserProfile failed, falling back to local DB:', err);
@@ -136,13 +142,14 @@ export const createBooking = async (
   if (database) {
     try {
       const bookingRef = doc(collection(database, COLLECTIONS.bookings));
-      await setDoc(bookingRef, {
+      const fullBooking: Booking = {
         ...booking,
         id: bookingRef.id,
         createdAt: Date.now(),
-      });
-      // Also cache to local database
-      await localDb.createLocalBooking({ ...booking }, []);
+      };
+      await setDoc(bookingRef, cleanFirestoreData(fullBooking));
+      // Sinkronkan ke local database dengan ID yang sama
+      await localDb.saveLocalBooking(fullBooking);
       return bookingRef.id;
     } catch (err) {
       console.warn('[Firestore] Remote createBooking failed, saving to local DB:', err);
@@ -156,13 +163,20 @@ export const getBookingsByDate = async (date: string): Promise<Booking[]> => {
   const database = getDb();
   if (database) {
     try {
+      // Query dengan single where('date', '==', date) agar tidak membutuhkan composite index
       const q = query(
         collection(database, COLLECTIONS.bookings),
-        where('date', '==', date),
-        where('status', 'in', ['Menunggu', 'Selesai'])
+        where('date', '==', date)
       );
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking);
+      const allBookings = querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking);
+      const filtered = allBookings.filter(
+        (b) => b.status === 'Menunggu' || b.status === 'Selesai'
+      );
+      for (const b of allBookings) {
+        await localDb.saveLocalBooking(b).catch(() => { });
+      }
+      return filtered;
     } catch (err) {
       console.warn('[Firestore] Remote getBookingsByDate failed, falling back to local DB:', err);
     }
@@ -184,14 +198,23 @@ export const getBookingsByCustomer = async (customerId: string): Promise<Booking
   const database = getDb();
   if (database) {
     try {
+      // Query dengan filter customerId dan sorting in-memory untuk menghindari error composite index Firestore
       const q = query(
         collection(database, COLLECTIONS.bookings),
-        where('customerId', '==', customerId),
-        orderBy('createdAt', 'desc'),
-        limit(50)
+        where('customerId', '==', customerId)
       );
       const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking);
+      const bookings = querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Booking);
+      const sorted = bookings
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        .slice(0, 50);
+
+      // Sinkronkan ke local database agar cache data booking tersimpan
+      for (const b of sorted) {
+        await localDb.saveLocalBooking(b).catch(() => { });
+      }
+
+      return sorted;
     } catch (err) {
       console.warn('[Firestore] Remote getBookingsByCustomer failed, falling back to local DB:', err);
     }

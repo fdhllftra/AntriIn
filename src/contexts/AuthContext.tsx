@@ -5,6 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from 'react';
+import { Platform } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,6 +13,7 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithCredential,
+  signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile as updateFirebaseProfile,
@@ -29,6 +31,8 @@ import {
   getLocalUserProfile,
   saveLocalUserProfile,
   initializeLocalDatabase,
+  isAdminWhatsAppNumber,
+  ADMIN_WHATSAPP_PROFILE,
 } from '../services/localDatabase';
 import { UserProfile, UserRole } from '../types';
 
@@ -42,9 +46,9 @@ const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '';
 
 // Periksa apakah Client ID merupakan OAuth Client ID yang valid (bukan API key)
 const isValidGoogleClientId = (id: string) =>
-  Boolean(id && id.includes('.googleusercontent.com'));
+  Boolean(id && id.trim().length > 10 && id.includes('googleusercontent.com'));
 
-const hasValidGoogleConfig =
+export const hasValidGoogleConfig =
   isValidGoogleClientId(GOOGLE_WEB_CLIENT_ID) ||
   isValidGoogleClientId(GOOGLE_ANDROID_CLIENT_ID) ||
   isValidGoogleClientId(GOOGLE_IOS_CLIENT_ID);
@@ -64,6 +68,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isSigningIn: boolean;
   authError: string | null;
+  hasValidGoogleConfig: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (name: string, email: string, password: string, role?: UserRole) => Promise<void>;
   signInWithWhatsApp: (phone: string, name?: string, role?: UserRole) => Promise<void>;
@@ -173,10 +178,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Tangani respons Google Auth jika konfigurasi valid
   useEffect(() => {
     if (response?.type === 'success') {
-      const { id_token } = response.params;
-      if (id_token && auth) {
+      const idToken =
+        response.params?.id_token ||
+        (response as any).authentication?.idToken ||
+        (response as any).params?.id_token;
+
+      if (idToken && auth) {
         setIsSigningIn(true);
-        const credential = GoogleAuthProvider.credential(id_token);
+        const credential = GoogleAuthProvider.credential(idToken);
         signInWithCredential(auth, credential)
           .then(async (userCredential) => {
             const fbUser = userCredential.user;
@@ -375,6 +384,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
+    const isAdminPhone = isAdminWhatsAppNumber(cleanPhone);
+    const resolvedRole: UserRole = isAdminPhone ? 'admin' : role;
+
     setIsSigningIn(true);
     try {
       // 1. Cek apakah nomor WA sudah pernah ada di database
@@ -382,18 +394,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (!matchedUser) {
         // Buat profil pengguna baru berbasis WhatsApp
-        const uid = `wa-${cleanPhone.replace(/\D/g, '') || Date.now()}`;
-        const newProfile: UserProfile = {
-          uid,
-          name: name?.trim() || `Pelanggan WA (${cleanPhone.slice(-4)})`,
-          email: `${cleanPhone.replace(/\D/g, '')}@whatsapp.antriin.com`,
-          phone: cleanPhone,
-          role,
-          createdAt: Date.now(),
-        };
+        const newProfile: UserProfile = isAdminPhone
+          ? { ...ADMIN_WHATSAPP_PROFILE, createdAt: Date.now() }
+          : {
+              uid: `wa-${cleanPhone.replace(/\D/g, '') || Date.now()}`,
+              name: name?.trim() || `Pelanggan WA (${cleanPhone.slice(-4)})`,
+              email: `${cleanPhone.replace(/\D/g, '')}@whatsapp.antriin.com`,
+              phone: cleanPhone,
+              role: resolvedRole,
+              createdAt: Date.now(),
+            };
 
-        matchedUser = await saveLocalUserProfile(uid, newProfile);
-        await createUserProfile(uid, matchedUser).catch(() => {});
+        matchedUser = await saveLocalUserProfile(newProfile.uid, newProfile);
+        await createUserProfile(newProfile.uid, matchedUser).catch(() => {});
+      } else if (
+        isAdminPhone ||
+        isAdminWhatsAppNumber(matchedUser.phone || '')
+      ) {
+        // Pastikan nomor admin selalu mendapat akses dashboard admin,
+        // baik di database lokal maupun di Firestore.
+        await updateUserProfile(matchedUser.uid, { role: 'admin' });
+        matchedUser = { ...matchedUser, role: 'admin' };
       }
 
       const appUser: AppUser = {
@@ -429,57 +450,120 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsSigningIn(true);
 
     try {
-      // Jika diberikan akun simulasi pengujian Google untuk Expo Go
-      if (customAccount) {
-        const uid = `google-${customAccount.email.replace(/[@.]/g, '_')}`;
-        let googleProfile = await getLocalUserProfile(uid);
-
-        if (!googleProfile) {
-          googleProfile = {
-            uid,
-            name: customAccount.name,
-            email: customAccount.email,
-            role: 'customer',
-            photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
-            createdAt: Date.now(),
-          };
-          await saveLocalUserProfile(uid, googleProfile);
-          await createUserProfile(uid, googleProfile).catch(() => {});
+      // 1. Jika di Platform Web dan ada auth, gunakan Web popup resmi Firebase
+      if (Platform.OS === 'web' && auth && !customAccount) {
+        try {
+          const provider = new GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          const userCredential = await signInWithPopup(auth, provider);
+          const fbUser = userCredential.user;
+          let existingProfile = await getUserProfile(fbUser.uid);
+          if (!existingProfile) {
+            existingProfile = {
+              uid: fbUser.uid,
+              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Pengguna Google',
+              email: fbUser.email || '',
+              photoURL: fbUser.photoURL || undefined,
+              role: 'customer',
+              createdAt: Date.now(),
+            };
+            await createUserProfile(fbUser.uid, existingProfile);
+          }
+          setUser(fbUser);
+          setProfile(existingProfile);
+          await AsyncStorage.setItem(
+            SESSION_KEY,
+            JSON.stringify({ user: fbUser, profile: existingProfile })
+          );
+          return;
+        } catch (popupErr: any) {
+          console.warn('Google popup error:', popupErr);
+          if (popupErr?.code === 'auth/popup-closed-by-user') {
+            setIsSigningIn(false);
+            return;
+          }
         }
-
-        const appUser: AppUser = {
-          uid: googleProfile.uid,
-          email: googleProfile.email,
-          displayName: googleProfile.name,
-          photoURL: googleProfile.photoURL || null,
-        };
-
-        setUser(appUser);
-        setProfile(googleProfile);
-        await AsyncStorage.setItem(
-          SESSION_KEY,
-          JSON.stringify({ user: appUser, profile: googleProfile })
-        );
-        return;
       }
 
-      // Jika Client ID OAuth Google sudah valid, jalankan flow Google Auth
-      if (hasValidGoogleConfig) {
+      // 2. Jika Client ID OAuth Google sudah valid, jalankan flow Google Auth native
+      if (hasValidGoogleConfig && !customAccount) {
         const result = await promptAsync();
         if (result?.type !== 'success') {
           setIsSigningIn(false);
         }
-      } else {
-        // Fallback default akun Google untuk kemudahan testing di Expo Go
-        const defaultGoogleUser = {
-          name: 'Pengguna Google (Expo)',
-          email: 'pengguna.google@gmail.com',
-        };
-        await signInWithGoogle(defaultGoogleUser);
+        return;
       }
-    } catch (error) {
+
+      // 3. Akun Google (diinput user atau dipilih di modal testing)
+      const targetAccount = customAccount || {
+        name: 'Pengguna Google (Expo)',
+        email: 'pengguna.google@gmail.com',
+      };
+
+      const cleanEmail = targetAccount.email.trim().toLowerCase();
+      const cleanName = targetAccount.name.trim() || cleanEmail.split('@')[0];
+      let fbUser: FirebaseUser | null = null;
+
+      // Otentikasi ke Firebase Auth agar Firestore Security Rules mengizinkan penyimpanan profil pengguna
+      if (auth) {
+        const syntheticPassword = `GoogleAuth_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}_AntriIn2026!`;
+        try {
+          const cred = await signInWithEmailAndPassword(auth, cleanEmail, syntheticPassword);
+          fbUser = cred.user;
+        } catch (signInErr: any) {
+          const code = signInErr?.code || '';
+          if (
+            code === 'auth/user-not-found' ||
+            code === 'auth/invalid-credential' ||
+            code === 'auth/wrong-password'
+          ) {
+            try {
+              const cred = await createUserWithEmailAndPassword(auth, cleanEmail, syntheticPassword);
+              fbUser = cred.user;
+              await updateFirebaseProfile(fbUser, { displayName: cleanName }).catch(() => {});
+            } catch (createErr) {
+              console.warn('[Firebase Auth] Pendaftaran Firebase Auth akun Google dilewati:', createErr);
+            }
+          }
+        }
+      }
+
+      const uid = fbUser ? fbUser.uid : `google-${cleanEmail.replace(/[@.]/g, '_')}`;
+      let googleProfile = await getUserProfile(uid);
+
+      if (!googleProfile) {
+        googleProfile = {
+          uid,
+          name: cleanName,
+          email: cleanEmail,
+          role: 'customer',
+          photoURL: fbUser?.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+          createdAt: Date.now(),
+        };
+        await saveLocalUserProfile(uid, googleProfile);
+        // Simpan langsung ke database Cloud Firestore
+        await createUserProfile(uid, googleProfile);
+      } else {
+        // Pastikan dokumen selalu tersinkron dan tersimpan di remote Cloud Firestore
+        await createUserProfile(uid, googleProfile).catch(() => {});
+      }
+
+      const appUser: AppUser = {
+        uid: googleProfile.uid,
+        email: googleProfile.email,
+        displayName: googleProfile.name,
+        photoURL: googleProfile.photoURL || null,
+      };
+
+      setUser(fbUser || appUser);
+      setProfile(googleProfile);
+      await AsyncStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ user: fbUser || appUser, profile: googleProfile })
+      );
+    } catch (error: any) {
       console.error('Google sign-in error:', error);
-      setAuthError('Autentikasi Google gagal.');
+      setAuthError(error?.message || 'Autentikasi Google gagal.');
     } finally {
       setIsSigningIn(false);
     }
@@ -607,6 +691,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isAdmin,
         isSigningIn,
         authError,
+        hasValidGoogleConfig,
         signInWithEmail,
         signUpWithEmail,
         signInWithWhatsApp,

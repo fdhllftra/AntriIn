@@ -24,6 +24,8 @@ import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { ReviewModal } from '../../components/ReviewModal';
 import { ETicketModal } from '../../components/ETicketModal';
+import { HistoryScreenSkeleton } from '../../components/Skeleton';
+import { Toast, ToastType } from '../../components/Toast';
 import { Typography, Spacing, Layout, Radius } from '../../constants';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatRupiah, parseDateString, formatDateLong } from '../../utils/format';
@@ -55,6 +57,11 @@ export const HistoryScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: ToastType }>({
+    visible: false,
+    message: '',
+    type: 'success',
+  });
 
   const loadBookings = useCallback(async () => {
     if (!user) return;
@@ -100,9 +107,18 @@ export const HistoryScreen: React.FC = () => {
             try {
               await updateBookingStatus(booking.id, 'Batal');
               cancelBookingReminder(booking.id);
+              setToast({
+                visible: true,
+                message: 'Jadwal booking berhasil dibatalkan. Slot waktu telah dikembalikan.',
+                type: 'info',
+              });
               loadBookings();
             } catch (err) {
-              Alert.alert('Gagal', 'Terjadi kesalahan saat membatalkan.');
+              setToast({
+                visible: true,
+                message: 'Terjadi kesalahan saat membatalkan jadwal.',
+                type: 'error',
+              });
               console.error(err);
             }
           },
@@ -118,9 +134,8 @@ export const HistoryScreen: React.FC = () => {
 
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memuat riwayat...</Text>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <HistoryScreenSkeleton />
       </SafeAreaView>
     );
   }
@@ -211,10 +226,10 @@ export const HistoryScreen: React.FC = () => {
             const hasReview = reviewedBookingIds.includes(item.id);
 
             return (
-              <Card style={styles.bookingCard}>
+              <Card style={styles.bookingCard} hoverable onPress={() => setSelectedTicket(item)}>
                 {/* Header: Status & Code */}
                 <View style={styles.cardHeader}>
-                  <Badge label={item.status} type={statusBadgeMap[item.status]} />
+                  <Badge label={item.status} type={statusBadgeMap[item.status]} pulse={isPending} />
                   <Text style={[styles.bookingIdText, { color: colors.textLight }]}>
                     #{item.id.slice(-6).toUpperCase()}
                   </Text>
@@ -308,7 +323,11 @@ export const HistoryScreen: React.FC = () => {
           onSuccess={() => {
             setActiveReviewBooking(null);
             loadBookings();
-            Alert.alert('Terima Kasih', 'Ulasan Anda berhasil dikirim!');
+            setToast({
+              visible: true,
+              message: 'Terima kasih! Ulasan Anda berhasil dikirim.',
+              type: 'success',
+            });
           }}
         />
       )}
@@ -318,6 +337,14 @@ export const HistoryScreen: React.FC = () => {
         visible={!!selectedTicket}
         booking={selectedTicket}
         onClose={() => setSelectedTicket(null)}
+      />
+
+      {/* Toast Feedback */}
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onDismiss={() => setToast((prev) => ({ ...prev, visible: false }))}
       />
     </SafeAreaView>
   );

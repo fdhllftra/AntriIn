@@ -4,18 +4,16 @@ import { initializeAuth, getReactNativePersistence, getAuth, Auth } from 'fireba
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
-const readEnv = (key: string): string => process.env[key] || '';
-
 const firebaseConfig = {
-  apiKey: readEnv('EXPO_PUBLIC_FIREBASE_API_KEY'),
-  authDomain: readEnv('EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN'),
-  projectId: readEnv('EXPO_PUBLIC_FIREBASE_PROJECT_ID'),
-  storageBucket: readEnv('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: readEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
-  appId: readEnv('EXPO_PUBLIC_FIREBASE_APP_ID'),
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '',
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '',
 };
 
-const databaseId = readEnv('EXPO_PUBLIC_FIREBASE_DATABASE_ID') || undefined;
+const databaseId = process.env.EXPO_PUBLIC_FIREBASE_DATABASE_ID || undefined;
 
 const isConfigComplete =
   Boolean(firebaseConfig.apiKey) &&

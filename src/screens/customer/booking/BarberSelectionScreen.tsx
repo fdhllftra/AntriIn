@@ -18,6 +18,7 @@ import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
 import { BookingStepIndicator } from '../../../components/BookingStepIndicator';
+import { SelectionScreenSkeleton } from '../../../components/Skeleton';
 import { Typography, Spacing, Layout, Radius } from '../../../constants';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { formatRupiah } from '../../../utils/format';
@@ -82,9 +83,9 @@ export const BarberSelectionScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memuat kapster...</Text>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <BookingStepIndicator currentStep={2} />
+        <SelectionScreenSkeleton count={3} />
       </SafeAreaView>
     );
   }
@@ -136,55 +137,46 @@ export const BarberSelectionScreen: React.FC = () => {
           const rating = barberRatings[item.id];
 
           return (
-            <TouchableOpacity
+            <Card
+              style={styles.barberCard}
               onPress={() => setSelectedBarberId(item.id)}
-              activeOpacity={0.85}>
-              <Card
-                style={[
-                  styles.barberCard,
-                  selected
-                    ? {
-                        borderColor: colors.primary,
-                        backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF',
-                      }
-                    : null,
-                ]}>
-                <View style={[styles.avatarWrap, { backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF' }]}>
-                  {item.photoURL ? (
-                    <Image source={{ uri: item.photoURL }} style={styles.avatar} />
-                  ) : (
-                    <Ionicons name="person" size={26} color={colors.primary} />
-                  )}
-                </View>
+              hoverable
+              selected={selected}>
+              <View style={[styles.avatarWrap, { backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF' }]}>
+                {item.photoURL ? (
+                  <Image source={{ uri: item.photoURL }} style={styles.avatar} />
+                ) : (
+                  <Ionicons name="person" size={26} color={colors.primary} />
+                )}
+              </View>
 
-                <View style={styles.barberInfo}>
-                  <Text style={[styles.barberName, { color: colors.text }]}>{item.name}</Text>
-                  <Text style={[styles.barberSpecialty, { color: colors.textSecondary }]}>
-                    {item.specialty || 'General Stylist'}
+              <View style={styles.barberInfo}>
+                <Text style={[styles.barberName, { color: colors.text }]}>{item.name}</Text>
+                <Text style={[styles.barberSpecialty, { color: colors.textSecondary }]}>
+                  {item.specialty || 'General Stylist'}
+                </Text>
+                <View style={styles.ratingRow}>
+                  <Ionicons name="star" size={13} color="#F59E0B" />
+                  <Text style={[styles.ratingText, { color: colors.text }]}>
+                    {rating?.average ? rating.average.toFixed(1) : '5.0'}
                   </Text>
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={13} color="#F59E0B" />
-                    <Text style={[styles.ratingText, { color: colors.text }]}>
-                      {rating?.average ? rating.average.toFixed(1) : '5.0'}
-                    </Text>
-                    <Text style={[styles.ratingCount, { color: colors.textLight }]}>
-                      ({rating?.count || 0} ulasan)
-                    </Text>
-                  </View>
+                  <Text style={[styles.ratingCount, { color: colors.textLight }]}>
+                    ({rating?.count || 0} ulasan)
+                  </Text>
                 </View>
+              </View>
 
-                <View
-                  style={[
-                    styles.radio,
-                    { borderColor: colors.border },
-                    selected && { borderColor: colors.primary, backgroundColor: colors.primary },
-                  ]}>
-                  {selected && (
-                    <Ionicons name="checkmark" size={14} color={colors.white} />
-                  )}
-                </View>
-              </Card>
-            </TouchableOpacity>
+              <View
+                style={[
+                  styles.radio,
+                  { borderColor: colors.border },
+                  selected && { borderColor: colors.primary, backgroundColor: colors.primary },
+                ]}>
+                {selected && (
+                  <Ionicons name="checkmark" size={14} color={colors.white} />
+                )}
+              </View>
+            </Card>
           );
         }}
         ListEmptyComponent={

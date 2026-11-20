@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "command": {
+    "start": {
+      "template": "Run npx expo start",
+      "description": "Start the Expo dev server"
+    },
+    "tunnel": {
+      "template": "Run npx expo start --tunnel",
+      "description": "Start the Expo dev server with tunnel"
+    }
+  }
+}

@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Modal,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,7 @@ export const LoginScreen: React.FC = () => {
     isSigningIn,
     authError,
     clearAuthError,
+    hasValidGoogleConfig,
   } = useAuth();
   const { colors, isDark } = useTheme();
 
@@ -127,6 +129,11 @@ export const LoginScreen: React.FC = () => {
   };
 
   // Google Handlers
+  const handleGoogleLoginPress = async () => {
+    resetErrors();
+    await signInWithGoogle();
+  };
+
   const handleGoogleCustomLogin = async (accEmail: string, accName: string) => {
     setShowGoogleModal(false);
     resetErrors();
@@ -477,11 +484,22 @@ export const LoginScreen: React.FC = () => {
 
             {/* Google Sign-in */}
             <TouchableOpacity
-              style={[styles.googleBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-              onPress={() => setShowGoogleModal(true)}
+              style={[
+                styles.googleBtn,
+                { backgroundColor: colors.background, borderColor: colors.border },
+                isSigningIn && { opacity: 0.7 },
+              ]}
+              onPress={handleGoogleLoginPress}
+              disabled={isSigningIn}
               activeOpacity={0.85}>
-              <Ionicons name="logo-google" size={18} color="#EA4335" />
-              <Text style={[styles.googleBtnText, { color: colors.text }]}>Lanjut dengan Google</Text>
+              {isSigningIn ? (
+                <ActivityIndicator size="small" color="#EA4335" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={18} color="#EA4335" />
+                  <Text style={[styles.googleBtnText, { color: colors.text }]}>Lanjut dengan Google</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -553,8 +571,57 @@ export const LoginScreen: React.FC = () => {
               <Text style={[styles.modalTitle, { color: colors.text }]}>Masuk Akun Google</Text>
             </View>
             <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
-              Pilih akun Google simulasi untuk masuk di Expo Go:
+              Masukkan alamat email Google Anda atau pilih akun yang tersedia. Data profil akan tersimpan langsung di database Firebase:
             </Text>
+
+            {/* Input Email Google Pribadi */}
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', marginBottom: 6, color: colors.text }}>
+                Email Google Anda:
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  style={[
+                    styles.customGoogleInput,
+                    {
+                      flex: 1,
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  placeholder="nama.anda@gmail.com"
+                  placeholderTextColor={colors.textLight}
+                  value={customGoogleEmail}
+                  onChangeText={setCustomGoogleEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.customGoogleSubmitBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: customGoogleEmail.trim().length > 3 ? 1 : 0.6,
+                    },
+                  ]}
+                  disabled={customGoogleEmail.trim().length <= 3}
+                  onPress={() => {
+                    const cleanEmail = customGoogleEmail.trim();
+                    const cleanName = cleanEmail.split('@')[0];
+                    handleGoogleCustomLogin(cleanEmail, cleanName);
+                  }}>
+                  <Text style={styles.customGoogleSubmitBtnText}>Masuk</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+              <Text style={{ marginHorizontal: 8, fontSize: 11, color: colors.textLight }}>ATAU PILIH CONTOH</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+            </View>
 
             <TouchableOpacity
               style={[styles.googleAccountCard, { backgroundColor: colors.background, borderColor: colors.border }]}
@@ -912,5 +979,23 @@ const styles = StyleSheet.create({
   modalCancelText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  customGoogleInput: {
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+  },
+  customGoogleSubmitBtn: {
+    paddingHorizontal: 16,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customGoogleSubmitBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

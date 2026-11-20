@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -8,6 +8,8 @@ import {
   ViewStyle,
   TextStyle,
   StyleProp,
+  Animated,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -40,25 +42,53 @@ export const Button: React.FC<ButtonProps> = ({
   textStyle,
 }) => {
   const { colors, isDark } = useTheme();
+  const [isHovered, setIsHovered] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      friction: 5,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 50,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const getVariantStyle = (): ViewStyle => {
     switch (variant) {
       case 'primary':
-        return { backgroundColor: colors.primary };
+        return {
+          backgroundColor: isHovered && !disabled ? colors.primaryDark : colors.primary,
+        };
       case 'secondary':
-        return { backgroundColor: colors.secondary };
+        return {
+          backgroundColor: isHovered && !disabled ? colors.secondaryDark : colors.secondary,
+        };
       case 'outline':
         return {
-          backgroundColor: 'transparent',
+          backgroundColor: isHovered && !disabled ? colors.primaryLight : 'transparent',
           borderWidth: 1.5,
           borderColor: colors.primary,
         };
       case 'ghost':
         return {
-          backgroundColor: isDark ? colors.surfaceVariant : colors.primaryLight,
+          backgroundColor: isHovered && !disabled
+            ? (isDark ? '#334155' : '#DBEAFE')
+            : (isDark ? colors.surfaceVariant : colors.primaryLight),
         };
       case 'danger':
-        return { backgroundColor: colors.error };
+        return {
+          backgroundColor: isHovered && !disabled ? '#991B1B' : colors.error,
+        };
       default:
         return { backgroundColor: colors.primary };
     }
@@ -70,10 +100,23 @@ export const Button: React.FC<ButtonProps> = ({
     return colors.white;
   };
 
+  const webStyles: ViewStyle = Platform.select({
+    web: {
+      cursor: disabled || loading ? 'not-allowed' : 'pointer',
+      transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+      outline: 'none',
+      boxShadow: isHovered && !disabled && (variant === 'primary' || variant === 'secondary')
+        ? '0 4px 12px rgba(37, 99, 235, 0.28)'
+        : 'none',
+    },
+    default: {},
+  }) as ViewStyle;
+
   const containerStyle = [
     styles.base,
     sizes[size],
     getVariantStyle(),
+    webStyles,
     disabled && styles.disabled,
     style,
   ];
@@ -85,28 +128,40 @@ export const Button: React.FC<ButtonProps> = ({
     textStyle,
   ];
 
+  const webHandlers = Platform.OS === 'web'
+    ? {
+        onMouseEnter: () => setIsHovered(true),
+        onMouseLeave: () => setIsHovered(false),
+      }
+    : {};
+
   return (
-    <TouchableOpacity
-      style={containerStyle}
-      onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.85}>
-      {loading ? (
-        <ActivityIndicator
-          color={
-            variant === 'outline' || variant === 'ghost'
-              ? colors.primary
-              : colors.white
-          }
-        />
-      ) : (
-        <View style={styles.contentRow}>
-          {icon && iconPosition === 'left' && <View style={styles.iconLeft}>{icon}</View>}
-          <Text style={labelStyle}>{title}</Text>
-          {icon && iconPosition === 'right' && <View style={styles.iconRight}>{icon}</View>}
-        </View>
-      )}
-    </TouchableOpacity>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={containerStyle}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={disabled || loading}
+        activeOpacity={0.88}
+        {...webHandlers}>
+        {loading ? (
+          <ActivityIndicator
+            color={
+              variant === 'outline' || variant === 'ghost'
+                ? colors.primary
+                : colors.white
+            }
+          />
+        ) : (
+          <View style={styles.contentRow}>
+            {icon && iconPosition === 'left' && <View style={styles.iconLeft}>{icon}</View>}
+            <Text style={labelStyle}>{title}</Text>
+            {icon && iconPosition === 'right' && <View style={styles.iconRight}>{icon}</View>}
+          </View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 };
 

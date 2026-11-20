@@ -25,6 +25,7 @@ import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { RatingSummary } from '../../components/RatingInput';
 import { ETicketModal } from '../../components/ETicketModal';
+import { HomeScreenSkeleton } from '../../components/Skeleton';
 import { Colors, Typography, Spacing, Layout, Radius } from '../../constants';
 import { useTheme } from '../../contexts/ThemeContext';
 import { formatRupiah, parseDateString, formatDateLong } from '../../utils/format';
@@ -107,9 +108,8 @@ export const HomeScreen: React.FC = () => {
 
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memuat jadwal barbershop...</Text>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <HomeScreenSkeleton />
       </SafeAreaView>
     );
   }
@@ -156,7 +156,7 @@ export const HomeScreen: React.FC = () => {
             <Ionicons name="storefront-outline" size={18} color={colors.primary} />
             <Text style={[styles.shopInfoText, { color: colors.text }]}>Edi Barbershop • Buka 09:00 - 21:00 WIB</Text>
           </View>
-          <Badge label="Buka" type="success" />
+          <Badge label="Buka" type="success" pulse />
         </View>
 
         {/* ACTIVE BOOKING CARD (UX WIN: Never lose ticket!) */}
@@ -167,7 +167,7 @@ export const HomeScreen: React.FC = () => {
                 <Ionicons name="time" size={16} color="#B45309" />
                 <Text style={styles.activeBookingTagText}>Antrean Aktif Anda</Text>
               </View>
-              <Badge label="Menunggu" type="warning" />
+              <Badge label="Menunggu" type="warning" pulse />
             </View>
 
             <View style={styles.activeBookingDetails}>
@@ -286,7 +286,11 @@ export const HomeScreen: React.FC = () => {
         </View>
 
         {services.map((service) => (
-          <Card key={service.id} style={styles.serviceModernCard}>
+          <Card
+            key={service.id}
+            style={styles.serviceModernCard}
+            onPress={() => goToBooking(service)}
+            hoverable>
             <View style={styles.serviceMain}>
               <View style={[styles.serviceIconWrap, { backgroundColor: isDark ? colors.surfaceVariant : '#EFF6FF' }]}>
                 <Ionicons name="cut" size={22} color={colors.primary} />

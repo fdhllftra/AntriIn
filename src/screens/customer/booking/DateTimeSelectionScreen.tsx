@@ -15,6 +15,7 @@ import { getBookedSlots, getBlockedSlots } from '../../../services/firestore';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
 import { BookingStepIndicator } from '../../../components/BookingStepIndicator';
+import { SlotGridSkeleton } from '../../../components/Skeleton';
 import { Typography, Spacing, Layout, Radius } from '../../../constants';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { getDateOptions, generateTimeSlots, TimeSlot } from '../../../utils/dates';
@@ -270,9 +271,8 @@ export const DateTimeSelectionScreen: React.FC = () => {
             <Button title="Coba Lagi" onPress={handleRefresh} size="sm" />
           </View>
         ) : loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Memeriksa ketersediaan jam...</Text>
+          <View style={{ paddingVertical: 12 }}>
+            <SlotGridSkeleton />
           </View>
         ) : (
           <View style={styles.timeSection}>
