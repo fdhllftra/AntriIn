@@ -2,7 +2,6 @@ import {
   getDoc,
   doc,
   setDoc,
-  updateDoc,
   query,
   collection,
   where,
@@ -10,6 +9,8 @@ import {
   orderBy,
   limit,
   deleteDoc,
+  writeBatch,
+  runTransaction,
   Firestore,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -25,7 +26,22 @@ const COLLECTIONS = {
   barbers: 'barbers',
   blockedSlots: 'blockedSlots',
   reviews: 'reviews',
+  slotLocks: 'slotLocks',
 };
+
+/**
+ * ID deterministik untuk kunci slot. Dipakai bersama oleh klien dan script backfill
+ * agar satu (tanggal, kapster, jam) hanya memiliki satu kunci aktif.
+ */
+export const buildSlotLockId = (
+  date: string,
+  barberId: string,
+  timeSlot: string
+): string => `${date}_${barberId}_${timeSlot.replace(/:/g, '-')}`;
+
+/** Data lokal perangkat tidak tepercaya: role selalu diturunkan menjadi customer. */
+const trustLocalProfile = (profile: UserProfile | null): UserProfile | null =>
+  profile ? { ...profile, role: 'customer' as const } : null;
 
 const cleanFirestoreData = (obj: Record<string, any>): Record<string, any> => {
   const result: Record<string, any> = {};
@@ -41,21 +57,16 @@ export const createUserProfile = async (
   uid: string,
   profile: Omit<UserProfile, 'uid'>
 ): Promise<void> => {
-  // Always update local database for guaranteed offline/testing availability
-  await localDb.saveLocalUserProfile(uid, profile);
-
   const database = getDb();
   if (database) {
-    try {
-      const dataToSave = cleanFirestoreData({
-        ...profile,
-        createdAt: Date.now(),
-      });
-      await setDoc(doc(database, COLLECTIONS.users, uid), dataToSave, { merge: true });
-    } catch (err) {
-      console.warn('[Firestore] Failed to save profile to remote, kept locally:', err);
-    }
+    const dataToSave = cleanFirestoreData({
+      ...profile,
+      createdAt: Date.now(),
+    });
+    // Firebase adalah sumber kebenaran: kesalahan harus terlihat oleh pemanggil.
+    await setDoc(doc(database, COLLECTIONS.users, uid), dataToSave, { merge: true });
   }
+  await localDb.saveLocalUserProfile(uid, profile).catch(() => {});
 };
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
@@ -69,33 +80,32 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
         await localDb.saveLocalUserProfile(uid, remoteData).catch(() => { });
         return remoteData;
       }
-      // Jika profil belum ada di Firestore tapi ada di local DB, sinkronkan ke Firestore
+      // Jika profil belum ada di Firestore tapi ada di local DB, sinkronkan ke Firestore.
+      // Role selalu dipaksa 'customer': klien tidak boleh membuat profil admin.
       const localData = await localDb.getLocalUserProfile(uid);
       if (localData) {
-        await setDoc(docRef, cleanFirestoreData(localData), { merge: true }).catch(() => { });
-        return localData;
+        const safeLocalData = { ...localData, role: 'customer' as const };
+        await setDoc(docRef, cleanFirestoreData(safeLocalData), { merge: true }).catch(() => { });
+        return safeLocalData;
       }
     } catch (err) {
       console.warn('[Firestore] Remote getUserProfile failed, falling back to local DB:', err);
+      return trustLocalProfile(await localDb.getLocalUserProfile(uid));
     }
   }
-  return localDb.getLocalUserProfile(uid);
+  return trustLocalProfile(await localDb.getLocalUserProfile(uid));
 };
 
 export const updateUserProfile = async (
   uid: string,
   data: Partial<UserProfile>
 ): Promise<void> => {
-  await localDb.saveLocalUserProfile(uid, data);
   const database = getDb();
   if (database) {
-    try {
-      const cleanedData = cleanFirestoreData(data as Record<string, any>);
-      await setDoc(doc(database, COLLECTIONS.users, uid), cleanedData, { merge: true });
-    } catch (err) {
-      console.warn('[Firestore] Failed remote updateUserProfile:', err);
-    }
+    const cleanedData = cleanFirestoreData(data as Record<string, any>);
+    await setDoc(doc(database, COLLECTIONS.users, uid), cleanedData, { merge: true });
   }
+  await localDb.saveLocalUserProfile(uid, data).catch(() => {});
 };
 
 export const getServices = async (): Promise<Service[]> => {
@@ -139,24 +149,43 @@ export const createBooking = async (
   }
 
   const database = getDb();
-  if (database) {
-    try {
-      const bookingRef = doc(collection(database, COLLECTIONS.bookings));
-      const fullBooking: Booking = {
-        ...booking,
-        id: bookingRef.id,
-        createdAt: Date.now(),
-      };
-      await setDoc(bookingRef, cleanFirestoreData(fullBooking));
-      // Sinkronkan ke local database dengan ID yang sama
-      await localDb.saveLocalBooking(fullBooking);
-      return bookingRef.id;
-    } catch (err) {
-      console.warn('[Firestore] Remote createBooking failed, saving to local DB:', err);
-    }
+  if (!database) {
+    return localDb.createLocalBooking(booking, bookedSlots);
   }
 
-  return localDb.createLocalBooking(booking, bookedSlots);
+  const bookingRef = doc(collection(database, COLLECTIONS.bookings));
+  const fullBooking: Booking = {
+    ...booking,
+    id: bookingRef.id,
+    createdAt: Date.now(),
+  };
+  const slotLockId = buildSlotLockId(booking.date, booking.barberId, booking.timeSlot);
+  const slotLockRef = doc(database, COLLECTIONS.slotLocks, slotLockId);
+
+  // Booking dan kunci slot ditulis dalam satu transaksi: jika kunci sudah dipakai
+  // pelanggan lain, seluruh transaksi gagal dan slot tidak ikut terpesan.
+  await runTransaction(database, async (transaction) => {
+    const existingLock = await transaction.get(slotLockRef);
+    if (existingLock.exists()) {
+      throw new Error('SLOT_TAKEN');
+    }
+    transaction.set(bookingRef, cleanFirestoreData(fullBooking));
+    transaction.set(
+      slotLockRef,
+      cleanFirestoreData({
+        id: slotLockId,
+        date: booking.date,
+        timeSlot: booking.timeSlot,
+        barberId: booking.barberId,
+        customerId: booking.customerId,
+        createdAt: Date.now(),
+      })
+    );
+  });
+
+  // Lokal hanya cache setelah penulisan Firebase berhasil.
+  await localDb.saveLocalBooking(fullBooking).catch(() => {});
+  return bookingRef.id;
 };
 
 export const getBookingsByDate = async (date: string): Promise<Booking[]> => {
@@ -188,7 +217,25 @@ export const getBookedSlots = async (
   barberId: string,
   date: string
 ): Promise<string[]> => {
-  const bookings = await getBookingsByDate(date);
+  const database = getDb();
+  if (database) {
+    try {
+      // Koleksi slotLocks sengaja dibaca (bukan bookings) agar pelanggan tidak
+      // membutuhkan izin membaca booking milik pengguna lain.
+      const q = query(
+        collection(database, COLLECTIONS.slotLocks),
+        where('date', '==', date)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs
+        .map((d) => d.data() as { barberId?: string; timeSlot?: string })
+        .filter((lock) => lock.barberId === barberId && typeof lock.timeSlot === 'string')
+        .map((lock) => lock.timeSlot as string);
+    } catch (err) {
+      console.warn('[Firestore] Remote getBookedSlots failed, falling back to local DB:', err);
+    }
+  }
+  const bookings = await localDb.getLocalBookingsByDate(date);
   return bookings
     .filter((b) => b.barberId === barberId && (b.status === 'Menunggu' || b.status === 'Selesai'))
     .map((b) => b.timeSlot);
@@ -226,20 +273,33 @@ export const updateBookingStatus = async (
   bookingId: string,
   status: BookingStatus
 ): Promise<void> => {
-  // Always update locally
-  await localDb.updateLocalBookingStatus(bookingId, status);
-
   const database = getDb();
-  if (database) {
-    try {
-      await updateDoc(doc(database, COLLECTIONS.bookings, bookingId), {
-        status,
-        updatedAt: Date.now(),
-      });
-    } catch (err) {
-      console.warn('[Firestore] Remote updateBookingStatus failed:', err);
-    }
+  if (!database) {
+    await localDb.updateLocalBookingStatus(bookingId, status);
+    return;
   }
+
+  const bookingRef = doc(database, COLLECTIONS.bookings, bookingId);
+  const snapshot = await getDoc(bookingRef);
+  const batch = writeBatch(database);
+  batch.update(bookingRef, {
+    status,
+    updatedAt: Date.now(),
+  });
+
+  // Membatalkan booking harus membebaskan kunci slot di transaksi yang sama.
+  if (status === 'Batal' && snapshot.exists()) {
+    const booking = snapshot.data() as Booking;
+    batch.delete(
+      doc(
+        database,
+        COLLECTIONS.slotLocks,
+        buildSlotLockId(booking.date, booking.barberId, booking.timeSlot)
+      )
+    );
+  }
+  await batch.commit();
+  await localDb.updateLocalBookingStatus(bookingId, status).catch(() => {});
 };
 
 export const getBlockedSlots = async (date: string): Promise<BlockedSlot[]> => {
@@ -257,54 +317,50 @@ export const getBlockedSlots = async (date: string): Promise<BlockedSlot[]> => {
 };
 
 export const blockSlot = async (date: string, timeSlot: string): Promise<void> => {
-  await localDb.createLocalBlockedSlot(date, timeSlot);
   const database = getDb();
-  if (database) {
-    try {
-      const slotRef = doc(collection(database, COLLECTIONS.blockedSlots));
-      await setDoc(slotRef, {
-        id: slotRef.id,
-        date,
-        timeSlot,
-        createdAt: Date.now(),
-      });
-    } catch (err) {
-      console.warn('[Firestore] Remote blockSlot failed:', err);
-    }
+  if (!database) {
+    await localDb.createLocalBlockedSlot(date, timeSlot);
+    return;
   }
+
+  const slotRef = doc(collection(database, COLLECTIONS.blockedSlots));
+  await setDoc(slotRef, {
+    id: slotRef.id,
+    date,
+    timeSlot,
+    createdAt: Date.now(),
+  });
+  await localDb.createLocalBlockedSlot(date, timeSlot).catch(() => {});
 };
 
 export const unblockSlot = async (slotId: string): Promise<void> => {
-  await localDb.deleteLocalBlockedSlot(slotId);
   const database = getDb();
-  if (database) {
-    try {
-      await deleteDoc(doc(database, COLLECTIONS.blockedSlots, slotId));
-    } catch (err) {
-      console.warn('[Firestore] Remote unblockSlot failed:', err);
-    }
+  if (!database) {
+    await localDb.deleteLocalBlockedSlot(slotId);
+    return;
   }
+
+  await deleteDoc(doc(database, COLLECTIONS.blockedSlots, slotId));
+  await localDb.deleteLocalBlockedSlot(slotId).catch(() => {});
 };
 
 export const createReview = async (
   review: Omit<Review, 'id' | 'createdAt'>
 ): Promise<string> => {
   const database = getDb();
-  if (database) {
-    try {
-      const reviewRef = doc(collection(database, COLLECTIONS.reviews));
-      await setDoc(reviewRef, {
-        ...review,
-        id: reviewRef.id,
-        createdAt: Date.now(),
-      });
-      await localDb.createLocalReview(review);
-      return reviewRef.id;
-    } catch (err) {
-      console.warn('[Firestore] Remote createReview failed, saving locally:', err);
-    }
+  if (!database) {
+    return localDb.createLocalReview(review);
   }
-  return localDb.createLocalReview(review);
+
+  const reviewRef = doc(collection(database, COLLECTIONS.reviews));
+  const cleanReview = cleanFirestoreData({
+    ...review,
+    id: reviewRef.id,
+    createdAt: Date.now(),
+  });
+  await setDoc(reviewRef, cleanReview);
+  await localDb.createLocalReview(cleanReview as Omit<Review, 'id' | 'createdAt'>).catch(() => {});
+  return reviewRef.id;
 };
 
 export const getReviewByBooking = async (bookingId: string): Promise<Review | null> => {

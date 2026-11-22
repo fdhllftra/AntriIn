@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getServices } from '../../../services/firestore';
+import { subscribeToServices } from '../../../services/realtime';
 import { Service } from '../../../types';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
@@ -52,6 +53,16 @@ export const ServiceSelectionScreen: React.FC = () => {
   useEffect(() => {
     loadServices();
   }, [loadServices]);
+
+  // Perubahan katalog layanan dari Firebase langsung tampil di layar ini.
+  useEffect(
+    () =>
+      subscribeToServices((data) => {
+        setServices(data);
+        setLoading(false);
+      }),
+    []
+  );
 
   const toggleService = (id: string) => {
     setSelectedIds((prev) =>

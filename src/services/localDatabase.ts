@@ -20,49 +20,6 @@ const STORAGE_KEYS = {
   REVIEWS: '@antriin_db_reviews',
 };
 
-const ADMIN_WHATSAPP_NUMBER = '083832848640';
-
-export const ADMIN_WHATSAPP_PROFILE: UserProfile = {
-  uid: 'admin-wa-83832848640',
-  name: 'Admin Barbershop (WhatsApp)',
-  email: 'admin.whatsapp@antriin.com',
-  phone: ADMIN_WHATSAPP_NUMBER,
-  role: 'admin',
-};
-
-const normalizePhoneForComparison = (phone: string): string => {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('62')) return digits.slice(2);
-  if (digits.startsWith('0')) return digits.slice(1);
-  return digits;
-};
-
-const ADMIN_WHATSAPP_KEY = normalizePhoneForComparison(ADMIN_WHATSAPP_NUMBER);
-
-export const isAdminWhatsAppNumber = (phone: string): boolean =>
-  normalizePhoneForComparison(phone) === ADMIN_WHATSAPP_KEY;
-
-const ensureAdminWhatsAppUser = async (): Promise<void> => {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.USERS);
-    const users: UserProfile[] = raw ? JSON.parse(raw) : [];
-    const existingIndex = users.findIndex((u) =>
-      isAdminWhatsAppNumber(u.phone || '')
-    );
-
-    if (existingIndex >= 0) {
-      if (users[existingIndex].role === 'admin') return;
-      users[existingIndex] = { ...users[existingIndex], role: 'admin' };
-    } else {
-      users.push({ ...ADMIN_WHATSAPP_PROFILE, createdAt: Date.now() });
-    }
-
-    await AsyncStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  } catch (error) {
-    console.warn('Failed to ensure WhatsApp admin user:', error);
-  }
-};
-
 const getDateString = (relativeDays: number = 0): string => {
   const d = new Date();
   d.setDate(d.getDate() + relativeDays);
@@ -76,7 +33,6 @@ export const initializeLocalDatabase = async (): Promise<void> => {
   try {
     const isInitialized = await AsyncStorage.getItem(STORAGE_KEYS.INITIALIZED);
     if (isInitialized === 'true') {
-      await ensureAdminWhatsAppUser();
       return;
     }
 
@@ -166,8 +122,6 @@ export const initializeLocalDatabase = async (): Promise<void> => {
       [STORAGE_KEYS.BLOCKED_SLOTS, JSON.stringify(blockedSlots)],
       [STORAGE_KEYS.INITIALIZED, 'true'],
     ]);
-
-    await ensureAdminWhatsAppUser();
   } catch (error) {
     console.warn('Failed to initialize local database:', error);
   }
@@ -350,6 +304,12 @@ export const deleteLocalBlockedSlot = async (slotId: string): Promise<void> => {
 };
 
 // Reviews
+export const getLocalReviews = async (): Promise<Review[]> => {
+  await initializeLocalDatabase();
+  const raw = await AsyncStorage.getItem(STORAGE_KEYS.REVIEWS);
+  return raw ? JSON.parse(raw) : [];
+};
+
 export const getLocalReviewsByBarber = async (
   barberId: string
 ): Promise<Review[]> => {

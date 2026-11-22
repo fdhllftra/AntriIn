@@ -1,65 +1,45 @@
 /**
  * Script Seeder Database AntriIn dari File JSON (test-database.json)
  *
- * Mengimpor seluruh data testing (Layanan, Kapster, Akun Pengguna, Antrean Booking, Review, & Blocked Slots)
- * langsung ke Firebase Firestore.
+ * Mengimpor seluruh data testing (Layanan, Kapster, Akun Pengguna, Antrean Booking,
+ * Review, & Blocked Slots) langsung ke Firebase Firestore.
+ *
+ * Memakai Firebase Admin SDK agar penulisan tidak diblokir oleh firestore.rules
+ * yang ketat (klien tidak boleh menulis role admin / booking arbitrary).
  *
  * Cara menjalankan:
+ *   set FIREBASE_SERVICE_ACCOUNT_PATH=C:\path\service-account.json
  *   npm run seed:json
  * atau:
  *   node scripts/seed-from-json.js
  */
 
-const fs = require('fs');
 const path = require('path');
-const { initializeApp } = require('firebase/app');
-const {
-  getFirestore,
-  doc,
-  writeBatch,
-} = require('firebase/firestore');
+const admin = require('firebase-admin');
 
-// 1. Baca konfigurasi .env
-const envPath = path.resolve(__dirname, '../.env');
-if (!fs.existsSync(envPath)) {
-  console.error('❌ File .env tidak ditemukan di folder apps/.');
+const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+if (!serviceAccountPath) {
+  console.error(
+    'ERROR: Set FIREBASE_SERVICE_ACCOUNT_PATH dulu, contoh:\n' +
+      '  set FIREBASE_SERVICE_ACCOUNT_PATH=C:\\path\\to\\service-account.json\n' +
+      '  npm run seed:json'
+  );
   process.exit(1);
 }
 
-const envContent = fs.readFileSync(envPath, 'utf8');
-const env = {};
-envContent.split('\n').forEach((line) => {
-  const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-  if (match) {
-    let value = (match[2] || '').trim();
-    if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
-    if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-    env[match[1]] = value;
-  }
-});
-
-const firebaseConfig = {
-  apiKey: env.EXPO_PUBLIC_FIREBASE_API_KEY,
-  authDomain: env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: env.EXPO_PUBLIC_FIREBASE_APP_ID,
-};
-
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  console.error('❌ Konfigurasi Firebase di file .env belum lengkap.');
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccountPath),
+  });
+} catch (err) {
+  console.error('Gagal inisialisasi Firebase Admin:', err.message);
   process.exit(1);
 }
 
-// 2. Baca file JSON Database
+const db = admin.firestore();
+
 const dataPath = path.resolve(__dirname, '../data/test-database.json');
-if (!fs.existsSync(dataPath)) {
-  console.error('❌ File data/test-database.json tidak ditemukan.');
-  process.exit(1);
-}
-
-const database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+const database = require(dataPath);
 
 // Helper untuk menghitung tanggal relatif (hari ini, besok, kemarin)
 function getDateString(relativeDays = 0) {
@@ -73,21 +53,13 @@ function getDateString(relativeDays = 0) {
 
 async function runSeed() {
   console.log('🚀 Memulai Seeding Database Testing ke Firebase Firestore...');
-  console.log(`📌 Project ID: ${firebaseConfig.projectId}`);
 
-  const app = initializeApp(firebaseConfig);
-  const databaseId = env.EXPO_PUBLIC_FIREBASE_DATABASE_ID || undefined;
-  if (databaseId) {
-    console.log(`📌 Database ID: ${databaseId}`);
-  }
-  const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
   const now = Date.now();
-
   const servicesMap = {};
 
   // 1. Seed Services
   console.log('\n📦 [1/6] Mengimpor Layanan Barbershop (services)...');
-  const serviceBatch = writeBatch(db);
+  let batch = db.batch();
   for (const srv of database.services) {
     const srvData = {
       name: srv.name,
@@ -98,15 +70,14 @@ async function runSeed() {
       createdAt: now,
     };
     servicesMap[srv.id] = { id: srv.id, ...srvData };
-    const docRef = doc(db, 'services', srv.id);
-    serviceBatch.set(docRef, srvData);
+    batch.set(db.collection('services').doc(srv.id), srvData);
     console.log(`   ✓ ${srv.name} (Rp ${srv.price.toLocaleString('id-ID')})`);
   }
-  await serviceBatch.commit();
+  await batch.commit();
 
   // 2. Seed Barbers
   console.log('\n✂️  [2/6] Mengimpor Data Kapster (barbers)...');
-  const barberBatch = writeBatch(db);
+  batch = db.batch();
   for (const barber of database.barbers) {
     const barberData = {
       name: barber.name,
@@ -115,15 +86,14 @@ async function runSeed() {
       isActive: barber.isActive !== false,
       createdAt: now,
     };
-    const docRef = doc(db, 'barbers', barber.id);
-    barberBatch.set(docRef, barberData);
+    batch.set(db.collection('barbers').doc(barber.id), barberData);
     console.log(`   ✓ ${barber.name} (${barber.specialty})`);
   }
-  await barberBatch.commit();
+  await batch.commit();
 
-  // 3. Seed Users
+  // 3. Seed Users (dari Admin SDK, melewati aturan klien)
   console.log('\n👥 [3/6] Mengimpor Profil Pengguna (users)...');
-  const userBatch = writeBatch(db);
+  batch = db.batch();
   for (const user of database.users) {
     const userData = {
       name: user.name,
@@ -133,15 +103,14 @@ async function runSeed() {
       photoURL: user.photoURL || '',
       createdAt: now,
     };
-    const docRef = doc(db, 'users', user.uid);
-    userBatch.set(docRef, userData);
+    batch.set(db.collection('users').doc(user.uid), userData);
     console.log(`   ✓ [${userData.role.toUpperCase()}] ${user.name} (${user.email})`);
   }
-  await userBatch.commit();
+  await batch.commit();
 
   // 4. Seed Bookings
   console.log('\n📅 [4/6] Mengimpor Contoh Antrean Booking (bookings)...');
-  const bookingBatch = writeBatch(db);
+  batch = db.batch();
   for (const booking of database.bookings) {
     const date = getDateString(booking.relativeDays || 0);
     const services = (booking.serviceIds || [])
@@ -161,15 +130,14 @@ async function runSeed() {
       status: booking.status,
       createdAt: now - (booking.relativeDays < 0 ? Math.abs(booking.relativeDays) * 86400000 : 0),
     };
-    const docRef = doc(db, 'bookings', booking.id);
-    bookingBatch.set(docRef, bookingData);
+    batch.set(db.collection('bookings').doc(booking.id), bookingData);
     console.log(`   ✓ ${date} ${booking.timeSlot} - ${booking.customerName} (${booking.status})`);
   }
-  await bookingBatch.commit();
+  await batch.commit();
 
   // 5. Seed Reviews
   console.log('\n⭐ [5/6] Mengimpor Ulasan & Rating (reviews)...');
-  const reviewBatch = writeBatch(db);
+  batch = db.batch();
   for (const rev of database.reviews) {
     const revData = {
       bookingId: rev.bookingId,
@@ -179,15 +147,14 @@ async function runSeed() {
       comment: rev.comment,
       createdAt: now,
     };
-    const docRef = doc(db, 'reviews', rev.id);
-    reviewBatch.set(docRef, revData);
+    batch.set(db.collection('reviews').doc(rev.id), revData);
     console.log(`   ✓ ${rev.rating}★: "${rev.comment.substring(0, 45)}..."`);
   }
-  await reviewBatch.commit();
+  await batch.commit();
 
   // 6. Seed Blocked Slots
   console.log('\n🚫 [6/6] Mengimpor Slot Jam Ditutup (blockedSlots)...');
-  const blockedBatch = writeBatch(db);
+  batch = db.batch();
   for (const blk of database.blockedSlots) {
     const date = getDateString(blk.relativeDays || 0);
     const blkData = {
@@ -196,19 +163,18 @@ async function runSeed() {
       reason: blk.reason || 'Slot ditutup',
       createdAt: now,
     };
-    const docRef = doc(db, 'blockedSlots', blk.id);
-    blockedBatch.set(docRef, blkData);
+    batch.set(db.collection('blockedSlots').doc(blk.id), blkData);
     console.log(`   ✓ ${date} ${blk.timeSlot} - ${blk.reason}`);
   }
-  await blockedBatch.commit();
+  await batch.commit();
 
   console.log('\n🎉 ========================================================');
   console.log('✅ SEEDING DATABASE JSON BERHASIL DILAKUKAN!');
   console.log('========================================================');
-  console.log('Akun Pengujian Siap Digunakan:');
-  console.log('• Customer: pelanggan.demo@antriin.com (UID: demo-customer-01)');
-  console.log('• Admin:    admin.demo@antriin.com     (UID: demo-admin-01)');
-  console.log('\nSekarang buka aplikasi AntriIn, Anda akan langsung melihat layanan, kapster, dan antrean!');
+  console.log('Data realtime akan langsung tampil di aplikasi setelah listener tersambung.');
+  console.log(
+    '\nCatatan: akun demo dari data testing bukan jalur login; gunakan Firebase Auth sungguhan.'
+  );
   process.exit(0);
 }
 

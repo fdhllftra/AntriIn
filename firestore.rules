@@ -6,19 +6,65 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return signedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
+    }
+
+    // Admin ditetapkan oleh Firebase Auth yang terverifikasi:
+    // - nomor telepon hanya bisa menjadi claim setelah OTP SMS berhasil
+    // - email harus terverifikasi agar tidak bisa didaftarkan orang lain
+    function isDesignatedAdmin() {
+      return signedIn() && (
+        request.auth.token.phone_number == '+6283832848640'
+        // Identitas turunan nomor admin dipakai di Expo Go (OTP + Firebase Auth).
+        // Kode OTP dibuktikan di klien, jadi email_verified tidak diperlukan.
+        || request.auth.token.email == 'phone_6283832848640@antriin.phone'
+        || (request.auth.token.email == 'hanabi.maniac1@gmail.com'
+            && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        isDesignatedAdmin()
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isCompletedBookingOfUser(bookingId) {
+      return exists(/databases/$(database)/documents/bookings/$(bookingId))
+        && get(/databases/$(database)/documents/bookings/$(bookingId)).data.customerId == request.auth.uid
+        && get(/databases/$(database)/documents/bookings/$(bookingId)).data.status == 'Selesai';
+    }
+
+    // Kunci yang diizinkan untuk dokumen users. Role tidak boleh diubah klien.
+    function validUserKeys() {
+      return request.resource.data.keys().hasOnly([
+        'uid', 'name', 'email', 'phone', 'photoURL', 'role', 'createdAt'
+      ]);
     }
 
     // --- users ---
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create, update: if isOwner(uid);
+
+      // Klien hanya boleh membuat profil customer untuk uid-nya sendiri.
+      allow create: if isOwner(uid)
+        && validUserKeys()
+        && request.resource.data.uid == uid
+        && (isDesignatedAdmin() || request.resource.data.role == 'customer')
+        && request.resource.data.name is string
+        && request.resource.data.email is string;
+
+      // Pemilik biasa tidak boleh mengubah role; admin yang ditetapkan boleh.
+      allow update: if isAdmin() || (
+        isOwner(uid)
+        && validUserKeys()
+        && request.resource.data.uid == uid
+        && (isDesignatedAdmin() || request.resource.data.role == resource.data.role)
+      );
+
       allow delete: if false;
     }
 
@@ -34,22 +80,58 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    function validBookingCreate(bookingId) {
+      return request.resource.data.keys().hasOnly([
+          'id', 'customerId', 'customerName', 'customerPhone',
+          'services', 'barberId', 'barberName',
+          'date', 'timeSlot', 'totalPrice', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.id == bookingId
+        && request.resource.data.customerId is string
+        && request.resource.data.customerName is string
+        && request.resource.data.barberId is string
+        && request.resource.data.barberName is string
+        && request.resource.data.date is string
+        && request.resource.data.timeSlot is string
+        && request.resource.data.services is list
+        && request.resource.data.totalPrice is number
+        && request.resource.data.totalPrice >= 0;
+    }
+
     // --- bookings ---
     match /bookings/{id} {
-      allow read: if isOwner(resource.data.customerId) || isAdmin();
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.customerId == request.auth.uid);
+
       allow create: if signedIn()
+        && validBookingCreate(id)
         && request.resource.data.customerId == request.auth.uid
         && request.resource.data.status == 'Menunggu';
-      allow update: if isAdmin()
-        || (isOwner(request.resource.data.customerId)
-            && request.resource.data.status == 'Batal');
+
+      // Admin hanya mengubah status. Pelanggan hanya membatalkan booking
+      // miliknya sendiri (resource.data = data LAMA, bukan data baru).
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedAt'
+        ]) && (
+          (isAdmin() && request.resource.data.status in ['Menunggu', 'Selesai', 'Batal'])
+          || (
+            isOwner(resource.data.customerId)
+            && resource.data.status == 'Menunggu'
+            && request.resource.data.status == 'Batal'
+          )
+        );
+
       allow delete: if false;
     }
 
     // --- blockedSlots ---
     match /blockedSlots/{id} {
       allow read: if signedIn();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.date is string
+        && request.resource.data.timeSlot is string;
+      allow update, delete: if isAdmin();
     }
 
     // --- reviews ---
@@ -57,9 +139,34 @@ service cloud.firestore {
       allow read: if true;
       allow create: if signedIn()
         && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.bookingId is string
+        && request.resource.data.barberId is string
+        && request.resource.data.rating is int
         && request.resource.data.rating >= 1
-        && request.resource.data.rating <= 5;
+        && request.resource.data.rating <= 5
+        && isCompletedBookingOfUser(request.resource.data.bookingId);
       allow update, delete: if isAdmin();
+    }
+
+    // --- slotLocks ---
+    // Ringkasan ketersediaan slot yang sengaja dipisah dari `bookings`.
+    // Pelanggan boleh membacanya tanpa mendapat akses ke data booking pengguna lain.
+    // ID dokumen deterministik: {date}_{barberId}_{timeSlot}, sehingga pemesanan
+    // ganda gagal karena create pada dokumen yang sudah ada akan ditolak
+    // (update tidak diizinkan).
+    match /slotLocks/{slotLockId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.id == slotLockId
+        && request.resource.data.keys().hasOnly([
+          'id', 'date', 'timeSlot', 'barberId', 'customerId', 'createdAt'
+        ])
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.date is string
+        && request.resource.data.timeSlot is string
+        && request.resource.data.barberId is string;
+      allow delete: if isOwner(resource.data.customerId) || isAdmin();
+      allow update: if false;
     }
   }
 }

@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-// @ts-expect-error getReactNativePersistence is only exposed in react-native entrypoint
-import { initializeAuth, getReactNativePersistence, getAuth, Auth } from 'firebase/auth';
+import * as FirebaseAuth from 'firebase/auth';
+import { getAuth, Auth } from 'firebase/auth';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
@@ -26,19 +26,30 @@ let db: Firestore | null = null;
 
 try {
   if (isConfigComplete) {
-    if (getApps().length > 0) {
-      app = getApps()[0];
-      auth = getAuth(app);
-    } else {
-      app = initializeApp(firebaseConfig);
+    app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+
+    // `getReactNativePersistence` hanya tersedia di entrypoint react-native.
+    // Diakses lewat namespace agar tidak menghasilkan error TS/import saat
+    // resolusi bundle memilih entrypoint browser (mis. untuk web).
+    const getReactNativePersistence = (FirebaseAuth as any).getReactNativePersistence as
+      | ((storage: typeof ReactNativeAsyncStorage) => unknown)
+      | undefined;
+
+    if (getReactNativePersistence) {
       try {
-        auth = initializeAuth(app, {
-          persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+        auth = FirebaseAuth.initializeAuth(app, {
+          persistence: getReactNativePersistence(
+            ReactNativeAsyncStorage
+          ) as FirebaseAuth.Persistence,
         });
-      } catch {
+      } catch (error) {
+        // Auth bisa sudah terinisialisasi (Fast Refresh / modul lain).
         auth = getAuth(app);
       }
+    } else {
+      auth = getAuth(app);
     }
+
     db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
   } else {
     console.log('[Firebase] Berjalan dalam mode database lokal (AsyncStorage).');

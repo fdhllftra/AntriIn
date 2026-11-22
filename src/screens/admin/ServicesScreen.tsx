@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getServices } from '../../services/firestore';
+import { subscribeToServices } from '../../services/realtime';
 import { Service } from '../../types';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
@@ -41,6 +42,15 @@ export const ServicesScreen: React.FC = () => {
   useEffect(() => {
     loadServices();
   }, [loadServices]);
+
+  useEffect(
+    () =>
+      subscribeToServices((data) => {
+        setServices(data);
+        setLoading(false);
+      }),
+    []
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>

@@ -49,7 +49,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         customerId: booking.customerId,
         barberId: booking.barberId,
         rating,
-        comment: comment.trim() || undefined,
+        comment: comment.trim(),
       });
       setRating(0);
       setComment('');

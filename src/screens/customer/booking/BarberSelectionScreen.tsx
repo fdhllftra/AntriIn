@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { getBarbers, getReviewsByBarber } from '../../../services/firestore';
-import { Barber } from '../../../types';
+import { getBarbers } from '../../../services/firestore';
+import { subscribeToBarbers, subscribeToReviews } from '../../../services/realtime';
+import { Barber, Review } from '../../../types';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
@@ -36,9 +37,7 @@ export const BarberSelectionScreen: React.FC = () => {
   const { services } = route.params;
 
   const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [barberRatings, setBarberRatings] = useState<
-    Record<string, { average: number; count: number }>
-  >({});
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,25 +49,7 @@ export const BarberSelectionScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getBarbers();
-      setBarbers(data);
-
-      const ratingResults = await Promise.all(
-        data.map(async (barber) => {
-          const reviews = await getReviewsByBarber(barber.id);
-          const total = reviews.reduce((sum, rev) => sum + rev.rating, 0);
-          return {
-            barberId: barber.id,
-            average: reviews.length ? total / reviews.length : 5.0,
-            count: reviews.length,
-          };
-        })
-      );
-      const ratingMap: Record<string, { average: number; count: number }> = {};
-      ratingResults.forEach((r) => {
-        ratingMap[r.barberId] = { average: r.average, count: r.count };
-      });
-      setBarberRatings(ratingMap);
+      await getBarbers();
     } catch (err) {
       setError('Gagal memuat daftar kapster. Periksa koneksi Anda.');
       console.error(err);
@@ -80,6 +61,29 @@ export const BarberSelectionScreen: React.FC = () => {
   useEffect(() => {
     loadBarbers();
   }, [loadBarbers]);
+
+  useEffect(
+    () =>
+      subscribeToBarbers((data) => {
+        setBarbers(data);
+        setLoading(false);
+      }),
+    []
+  );
+  useEffect(() => subscribeToReviews(setReviews), []);
+
+  const barberRatings = useMemo(() => {
+    const map: Record<string, { average: number; count: number }> = {};
+    barbers.forEach((barber) => {
+      const items = reviews.filter((r) => r.barberId === barber.id);
+      const total = items.reduce((sum, r) => sum + r.rating, 0);
+      map[barber.id] = {
+        average: items.length ? total / items.length : 5.0,
+        count: items.length,
+      };
+    });
+    return map;
+  }, [barbers, reviews]);
 
   if (loading) {
     return (

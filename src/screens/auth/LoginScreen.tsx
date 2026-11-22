@@ -8,7 +8,6 @@ import {
   Platform,
   TextInput,
   TouchableOpacity,
-  Modal,
   Image,
   ActivityIndicator,
 } from 'react-native';
@@ -16,9 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/Button';
-import { Typography, Spacing, Layout, Radius } from '../../constants';
+import { Spacing, Layout, Radius } from '../../constants';
 import { useTheme } from '../../contexts/ThemeContext';
-import { UserRole } from '../../types';
 
 type AuthTab = 'whatsapp' | 'email';
 
@@ -26,11 +24,12 @@ export const LoginScreen: React.FC = () => {
   const {
     signInWithEmail,
     signUpWithEmail,
-    signInWithWhatsApp,
+    requestWhatsAppCode,
+    verifyWhatsAppCode,
     signInWithGoogle,
-    loginAsDemo,
     isSigningIn,
     authError,
+    phoneOtp,
     clearAuthError,
     hasValidGoogleConfig,
   } = useAuth();
@@ -47,19 +46,13 @@ export const LoginScreen: React.FC = () => {
   const [waName, setWaName] = useState('');
   const [waStep, setWaStep] = useState<'phone' | 'otp'>('phone');
   const [waOtp, setWaOtp] = useState('');
+  const [otpAttempts, setOtpAttempts] = useState(0);
 
   // Email form states
   const [emailName, setEmailName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
-  // Discrete Testing Mode Toggle (Accordion)
-  const [showDemoSection, setShowDemoSection] = useState(false);
-
-  // Google Modal State for Expo Go development
-  const [showGoogleModal, setShowGoogleModal] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
 
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -69,27 +62,40 @@ export const LoginScreen: React.FC = () => {
   };
 
   // WhatsApp Handlers
-  const handleRequestWaOtp = () => {
+  const handleRequestWaOtp = async () => {
     resetErrors();
     const clean = waPhone.trim().replace(/\s+/g, '');
     if (!clean || clean.length < 8) {
       setLocalError('Harap masukkan nomor WhatsApp yang valid (min. 8 digit).');
       return;
     }
-    setWaStep('otp');
-    setWaOtp('123456'); // Pre-fill OTP for smooth testing in Expo Go
+    try {
+      await requestWhatsAppCode(clean);
+      setOtpAttempts(0);
+      setWaOtp('');
+      setWaStep('otp');
+    } catch {
+      // Pesan error ditampilkan oleh context
+    }
   };
 
   const handleVerifyWaLogin = async () => {
     resetErrors();
-    if (!waOtp || waOtp.length < 4) {
-      setLocalError('Harap masukkan kode OTP verifikasi.');
+    if (otpAttempts >= 3) {
+      setLocalError('Autentikasi Gagal, silakan coba lagi.');
+      return;
+    }
+    if (!/^\d{6}$/.test(waOtp.trim())) {
+      setLocalError('Harap masukkan kode OTP 6 digit angka.');
       return;
     }
     try {
-      await signInWithWhatsApp(waPhone, waName, 'customer');
+      await verifyWhatsAppCode(waOtp, waName);
     } catch {
-      // Handled by context
+      setOtpAttempts((attempts) => attempts + 1);
+      if (otpAttempts + 1 >= 3) {
+        setLocalError('Autentikasi Gagal, silakan coba lagi.');
+      }
     }
   };
 
@@ -122,7 +128,7 @@ export const LoginScreen: React.FC = () => {
       return;
     }
     try {
-      await signUpWithEmail(emailName, email, password, 'customer');
+      await signUpWithEmail(emailName, email, password);
     } catch {
       // Handled by context
     }
@@ -132,12 +138,6 @@ export const LoginScreen: React.FC = () => {
   const handleGoogleLoginPress = async () => {
     resetErrors();
     await signInWithGoogle();
-  };
-
-  const handleGoogleCustomLogin = async (accEmail: string, accName: string) => {
-    setShowGoogleModal(false);
-    resetErrors();
-    await signInWithGoogle({ email: accEmail, name: accName });
   };
 
   const errorMessage = localError || authError;
@@ -303,6 +303,16 @@ export const LoginScreen: React.FC = () => {
                       </Text>
                     </View>
 
+                    {phoneOtp && (
+                      <View style={[styles.errorBox, { backgroundColor: colors.errorLight, borderColor: colors.primary }]}>
+                        <Ionicons name="information-circle" size={16} color={colors.primary} />
+                        <Text style={[styles.errorText, { color: colors.text }]}>
+                          Kode OTP Anda: <Text style={{ fontWeight: '700', letterSpacing: 2 }}>{phoneOtp}</Text>
+                          {' '}(berlaku 5 menit)
+                        </Text>
+                      </View>
+                    )}
+
                     <View style={styles.inputGroup}>
                       <View style={[styles.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
                         <Ionicons
@@ -313,7 +323,7 @@ export const LoginScreen: React.FC = () => {
                         />
                         <TextInput
                           style={[styles.input, { color: colors.text, letterSpacing: 6, fontWeight: '700' }]}
-                          placeholder="123456"
+                          placeholder="000000"
                           placeholderTextColor={colors.textLight}
                           value={waOtp}
                           onChangeText={setWaOtp}
@@ -333,7 +343,11 @@ export const LoginScreen: React.FC = () => {
 
                     <TouchableOpacity
                       style={styles.changePhoneBtn}
-                      onPress={() => setWaStep('phone')}>
+                      onPress={() => {
+                        setWaStep('phone');
+                        setWaOtp('');
+                        setOtpAttempts(0);
+                      }}>
                       <Text style={[styles.changePhoneText, { color: colors.primary }]}>
                         ← Ganti Nomor WhatsApp
                       </Text>
@@ -475,80 +489,35 @@ export const LoginScreen: React.FC = () => {
               </View>
             )}
 
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-              <Text style={[styles.dividerLabel, { color: colors.textSecondary }]}>ATAU</Text>
-              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-            </View>
-
-            {/* Google Sign-in */}
-            <TouchableOpacity
-              style={[
-                styles.googleBtn,
-                { backgroundColor: colors.background, borderColor: colors.border },
-                isSigningIn && { opacity: 0.7 },
-              ]}
-              onPress={handleGoogleLoginPress}
-              disabled={isSigningIn}
-              activeOpacity={0.85}>
-              {isSigningIn ? (
-                <ActivityIndicator size="small" color="#EA4335" />
-              ) : (
-                <>
-                  <Ionicons name="logo-google" size={18} color="#EA4335" />
-                  <Text style={[styles.googleBtnText, { color: colors.text }]}>Lanjut dengan Google</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Collapsible Clean Demo / Testing Access */}
-          <View style={styles.testingSection}>
-            <TouchableOpacity
-              style={styles.testingHeader}
-              onPress={() => setShowDemoSection(!showDemoSection)}
-              activeOpacity={0.7}>
-              <Ionicons name="flask-outline" size={15} color={colors.textSecondary} />
-              <Text style={[styles.testingHeaderText, { color: colors.textSecondary }]}>
-                Akses Uji Coba Cepat (1-Klik)
-              </Text>
-              <Ionicons
-                name={showDemoSection ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-
-            {showDemoSection && (
-              <View style={[styles.demoCard, { backgroundColor: isDark ? colors.surfaceVariant : '#F8FAFC', borderColor: colors.border }]}>
-                <Text style={[styles.demoDesc, { color: colors.textSecondary }]}>
-                  Pilih akun demo untuk langsung mencoba aplikasi tanpa registrasi manual:
-                </Text>
-                <View style={styles.demoButtonsRow}>
-                  <TouchableOpacity
-                    style={[styles.demoButton, { backgroundColor: colors.primaryBackground, borderColor: colors.primary }]}
-                    onPress={() => loginAsDemo('customer')}
-                    disabled={isSigningIn}>
-                    <Ionicons name="person" size={16} color={colors.primary} />
-                    <View>
-                      <Text style={[styles.demoBtnTitle, { color: colors.primaryDark }]}>Pelanggan</Text>
-                      <Text style={[styles.demoBtnSub, { color: colors.textSecondary }]}>Budi Santoso</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.demoButton, { backgroundColor: '#ECFDF5', borderColor: '#10B981' }]}
-                    onPress={() => loginAsDemo('admin')}
-                    disabled={isSigningIn}>
-                    <Ionicons name="shield-checkmark" size={16} color="#059669" />
-                    <View>
-                      <Text style={[styles.demoBtnTitle, { color: '#059669' }]}>Admin Barbershop</Text>
-                      <Text style={[styles.demoBtnSub, { color: colors.textSecondary }]}>Mas Hendra</Text>
-                    </View>
-                  </TouchableOpacity>
+            {hasValidGoogleConfig && (
+              <>
+                {/* Divider */}
+                <View style={styles.dividerRow}>
+                  <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                  <Text style={[styles.dividerLabel, { color: colors.textSecondary }]}>ATAU</Text>
+                  <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
                 </View>
-              </View>
+
+                {/* Google Sign-in */}
+                <TouchableOpacity
+                  style={[
+                    styles.googleBtn,
+                    { backgroundColor: colors.background, borderColor: colors.border },
+                    isSigningIn && { opacity: 0.7 },
+                  ]}
+                  onPress={handleGoogleLoginPress}
+                  disabled={isSigningIn}
+                  activeOpacity={0.85}>
+                  {isSigningIn ? (
+                    <ActivityIndicator size="small" color="#EA4335" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-google" size={18} color="#EA4335" />
+                      <Text style={[styles.googleBtnText, { color: colors.text }]}>Lanjut dengan Google</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
             )}
           </View>
 
@@ -557,110 +526,6 @@ export const LoginScreen: React.FC = () => {
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Google Test Modal */}
-      <Modal
-        visible={showGoogleModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowGoogleModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="logo-google" size={24} color="#EA4335" />
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Masuk Akun Google</Text>
-            </View>
-            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
-              Masukkan alamat email Google Anda atau pilih akun yang tersedia. Data profil akan tersimpan langsung di database Firebase:
-            </Text>
-
-            {/* Input Email Google Pribadi */}
-            <View style={{ marginBottom: 14 }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', marginBottom: 6, color: colors.text }}>
-                Email Google Anda:
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TextInput
-                  style={[
-                    styles.customGoogleInput,
-                    {
-                      flex: 1,
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
-                      color: colors.text,
-                    },
-                  ]}
-                  placeholder="nama.anda@gmail.com"
-                  placeholderTextColor={colors.textLight}
-                  value={customGoogleEmail}
-                  onChangeText={setCustomGoogleEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.customGoogleSubmitBtn,
-                    {
-                      backgroundColor: colors.primary,
-                      opacity: customGoogleEmail.trim().length > 3 ? 1 : 0.6,
-                    },
-                  ]}
-                  disabled={customGoogleEmail.trim().length <= 3}
-                  onPress={() => {
-                    const cleanEmail = customGoogleEmail.trim();
-                    const cleanName = cleanEmail.split('@')[0];
-                    handleGoogleCustomLogin(cleanEmail, cleanName);
-                  }}>
-                  <Text style={styles.customGoogleSubmitBtnText}>Masuk</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-              <Text style={{ marginHorizontal: 8, fontSize: 11, color: colors.textLight }}>ATAU PILIH CONTOH</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.googleAccountCard, { backgroundColor: colors.background, borderColor: colors.border }]}
-              onPress={() =>
-                handleGoogleCustomLogin('budi.santoso@gmail.com', 'Budi Santoso (Google)')
-              }>
-              <View style={[styles.googleAvatar, { backgroundColor: colors.primary }]}>
-                <Text style={styles.googleAvatarLetter}>B</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.accountName, { color: colors.text }]}>Budi Santoso (Pelanggan)</Text>
-                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>budi.santoso@gmail.com</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.googleAccountCard, { backgroundColor: colors.background, borderColor: colors.border }]}
-              onPress={() =>
-                handleGoogleCustomLogin('hendra.barber@gmail.com', 'Hendra Barbershop (Google)')
-              }>
-              <View style={[styles.googleAvatar, { backgroundColor: '#10B981' }]}>
-                <Text style={styles.googleAvatarLetter}>H</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.accountName, { color: colors.text }]}>Hendra (Admin Barbershop)</Text>
-                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>hendra.barber@gmail.com</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.modalCancelBtn}
-              onPress={() => setShowGoogleModal(false)}>
-              <Text style={[styles.modalCancelText, { color: colors.textSecondary }]}>Batal</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -866,136 +731,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  testingSection: {
-    marginTop: Spacing.lg,
-    alignItems: 'center',
-  },
-  testingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  testingHeaderText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  demoCard: {
-    width: '100%',
-    marginTop: Spacing.sm,
-    padding: 12,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-  },
-  demoDesc: {
-    fontSize: 11,
-    marginBottom: 10,
-  },
-  demoButtonsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  demoButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 10,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-  },
-  demoBtnTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  demoBtnSub: {
-    fontSize: 10,
-  },
   footerText: {
     fontSize: 11,
     textAlign: 'center',
     marginTop: Spacing.md,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.lg,
-  },
-  modalCard: {
-    width: '100%',
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    borderWidth: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 6,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  modalSub: {
-    fontSize: 12,
-    marginBottom: Spacing.md,
-  },
-  googleAccountCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  googleAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  googleAvatarLetter: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  accountName: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  accountEmail: {
-    fontSize: 11,
-  },
-  modalCancelBtn: {
-    alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  modalCancelText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  customGoogleInput: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-  },
-  customGoogleSubmitBtn: {
-    paddingHorizontal: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  customGoogleSubmitBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
   },
 });

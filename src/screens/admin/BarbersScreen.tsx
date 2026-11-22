@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getBarbers } from '../../services/firestore';
+import { subscribeToBarbers } from '../../services/realtime';
 import { Barber } from '../../types';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
@@ -41,6 +42,15 @@ export const BarbersScreen: React.FC = () => {
   useEffect(() => {
     loadBarbers();
   }, [loadBarbers]);
+
+  useEffect(
+    () =>
+      subscribeToBarbers((data) => {
+        setBarbers(data);
+        setLoading(false);
+      }),
+    []
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>

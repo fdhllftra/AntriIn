@@ -12,6 +12,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getBookedSlots, getBlockedSlots } from '../../../services/firestore';
+import {
+  subscribeToBookedSlots,
+  subscribeToBlockedSlots,
+} from '../../../services/realtime';
 import { BookingStackParamList } from '../../../navigation/types';
 import { Button } from '../../../components/Button';
 import { BookingStepIndicator } from '../../../components/BookingStepIndicator';
@@ -36,7 +40,8 @@ export const DateTimeSelectionScreen: React.FC = () => {
   const { services, barber } = route.params;
 
   const [selectedDate, setSelectedDate] = useState(DATE_OPTIONS[0].value);
-  const [slots, setSlots] = useState<TimeSlot[]>([]);
+  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
+  const [blockedTimes, setBlockedTimes] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,8 +57,8 @@ export const DateTimeSelectionScreen: React.FC = () => {
           getBookedSlots(barber.id, date),
           getBlockedSlots(date),
         ]);
-        const blockedTimes = blockedList.map((b) => b.timeSlot);
-        setSlots(generateTimeSlots(bookedSlots, blockedTimes));
+        setBookedTimes(bookedSlots);
+        setBlockedTimes(blockedList.map((b) => b.timeSlot));
       } catch (err) {
         setError('Gagal memuat ketersediaan slot. Periksa koneksi Anda.');
         console.error(err);
@@ -68,6 +73,24 @@ export const DateTimeSelectionScreen: React.FC = () => {
   useEffect(() => {
     loadSlots(selectedDate);
   }, [selectedDate, loadSlots]);
+
+  // Ketersediaan slot diperbarui otomatis saat booking/status berubah.
+  useEffect(
+    () => subscribeToBookedSlots(barber.id, selectedDate, setBookedTimes),
+    [barber.id, selectedDate]
+  );
+  useEffect(
+    () =>
+      subscribeToBlockedSlots(selectedDate, (items) =>
+        setBlockedTimes(items.map((b) => b.timeSlot))
+      ),
+    [selectedDate]
+  );
+
+  const slots = useMemo(
+    () => generateTimeSlots(bookedTimes, blockedTimes),
+    [bookedTimes, blockedTimes]
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);

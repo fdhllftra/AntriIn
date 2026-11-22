@@ -12,13 +12,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { getBookingsByCustomer, updateBookingStatus } from '../../services/firestore';
 import {
-  getBookingsByCustomer,
-  updateBookingStatus,
-  getReviewByBooking,
-} from '../../services/firestore';
+  subscribeToBookingsByCustomer,
+  subscribeToReviews,
+} from '../../services/realtime';
 import { cancelBookingReminder } from '../../services/notifications';
-import { Booking, BookingStatus } from '../../types';
+import { Booking, BookingStatus, Review } from '../../types';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -52,7 +52,7 @@ export const HistoryScreen: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('Semua');
   const [selectedTicket, setSelectedTicket] = useState<Booking | null>(null);
-  const [reviewedBookingIds, setReviewedBookingIds] = useState<string[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [activeReviewBooking, setActiveReviewBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,19 +68,7 @@ export const HistoryScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getBookingsByCustomer(user.uid);
-      setBookings(data);
-
-      const doneBookings = data.filter((b) => b.status === 'Selesai');
-      const results = await Promise.all(
-        doneBookings.map(async (b) => {
-          const review = await getReviewByBooking(b.id);
-          return review ? b.id : null;
-        })
-      );
-      setReviewedBookingIds(
-        results.filter((id): id is string => id !== null)
-      );
+      await getBookingsByCustomer(user.uid);
     } catch (err) {
       setError('Gagal memuat riwayat booking.');
       console.error(err);
@@ -93,6 +81,14 @@ export const HistoryScreen: React.FC = () => {
   useEffect(() => {
     loadBookings();
   }, [loadBookings]);
+
+  useEffect(() => subscribeToBookingsByCustomer(user?.uid, setBookings), [user?.uid]);
+  useEffect(() => subscribeToReviews(setReviews), []);
+
+  const reviewedBookingIds = useMemo(
+    () => reviews.map((r) => r.bookingId),
+    [reviews]
+  );
 
   const handleCancel = (booking: Booking) => {
     Alert.alert(

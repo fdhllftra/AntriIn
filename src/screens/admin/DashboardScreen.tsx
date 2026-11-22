@@ -19,7 +19,11 @@ import {
   unblockSlot,
 } from '../../services/firestore';
 import { cancelBookingReminder } from '../../services/notifications';
-import { Booking, BookingStatus } from '../../types';
+import { Booking, BookingStatus, BlockedSlot } from '../../types';
+import {
+  subscribeToBookingsByDate,
+  subscribeToBlockedSlots,
+} from '../../services/realtime';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -41,7 +45,7 @@ export const DashboardScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
   const [selectedDate, setSelectedDate] = useState(DATE_OPTIONS[0].value);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [slots, setSlots] = useState<TimeSlot[]>([]);
+  const [blockedSlots, setBlockedSlots] = useState<BlockedSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +62,7 @@ export const DashboardScreen: React.FC = () => {
         setBookings(
           bookingData.sort((a, b) => a.timeSlot.localeCompare(b.timeSlot))
         );
-        const blockedTimes = blockedData.map((b) => b.timeSlot);
-        setSlots(generateTimeSlots([], blockedTimes));
+        setBlockedSlots(blockedData);
       } catch (err) {
         setError('Gagal memuat data antrean admin.');
         console.error(err);
@@ -74,6 +77,21 @@ export const DashboardScreen: React.FC = () => {
   useEffect(() => {
     loadData(selectedDate);
   }, [selectedDate, loadData]);
+
+  // Antrean dan slot diblokir langsung tersinkron dari Firestore.
+  useEffect(
+    () =>
+      subscribeToBookingsByDate(selectedDate, (data) =>
+        setBookings([...data].sort((a, b) => a.timeSlot.localeCompare(b.timeSlot)))
+      ),
+    [selectedDate]
+  );
+  useEffect(() => subscribeToBlockedSlots(selectedDate, setBlockedSlots), [selectedDate]);
+
+  const slots = useMemo(
+    () => generateTimeSlots([], blockedSlots.map((b) => b.timeSlot)),
+    [blockedSlots]
+  );
 
   const handleStatusChange = async (booking: Booking, status: BookingStatus) => {
     try {
@@ -119,8 +137,7 @@ export const DashboardScreen: React.FC = () => {
     }
 
     if (slot.blocked) {
-      const blockedSlot = await getBlockedSlots(selectedDate);
-      const target = blockedSlot.find((b) => b.timeSlot === slot.time);
+      const target = blockedSlots.find((b) => b.timeSlot === slot.time);
       if (target) {
         Alert.alert(
           'Buka Slot Jam',

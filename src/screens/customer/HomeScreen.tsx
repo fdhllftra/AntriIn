@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { getServices, getBarbers } from '../../services/firestore';
+import { Service, Barber, Booking, Review } from '../../types';
 import {
-  getServices,
-  getBarbers,
-  getReviewsByBarber,
-  getBookingsByCustomer,
-} from '../../services/firestore';
-import { Service, Barber, Booking } from '../../types';
+  subscribeToServices,
+  subscribeToBarbers,
+  subscribeToReviews,
+  subscribeToBookingsByCustomer,
+} from '../../services/realtime';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -38,11 +39,10 @@ export const HomeScreen: React.FC = () => {
   
   const [services, setServices] = useState<Service[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<Booking | null>(null);
-  const [barberRatings, setBarberRatings] = useState<
-    Record<string, { average: number; count: number }>
-  >({});
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,35 +53,9 @@ export const HomeScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [serviceData, barberData, userBookings] = await Promise.all([
-        getServices(),
-        getBarbers(),
-        user ? getBookingsByCustomer(user.uid) : Promise.resolve([]),
-      ]);
-
-      setServices(serviceData);
-      setBarbers(barberData);
-
-      // Cari antrean aktif paling mendesak (status Menunggu)
-      const pending = userBookings.find((b) => b.status === 'Menunggu');
-      setActiveBooking(pending || null);
-
-      const ratingResults = await Promise.all(
-        barberData.map(async (barber) => {
-          const reviews = await getReviewsByBarber(barber.id);
-          const total = reviews.reduce((sum, rev) => sum + rev.rating, 0);
-          return {
-            barberId: barber.id,
-            average: reviews.length ? total / reviews.length : 0,
-            count: reviews.length,
-          };
-        })
-      );
-      const ratingMap: Record<string, { average: number; count: number }> = {};
-      ratingResults.forEach((r) => {
-        ratingMap[r.barberId] = { average: r.average, count: r.count };
-      });
-      setBarberRatings(ratingMap);
+      // Booking, ulasan, layanan, dan kapster juga diperbarui otomatis oleh
+      // listener realtime di bawah; ini hanya untuk status loading awal.
+      await Promise.all([getServices(), getBarbers()]);
     } catch (err) {
       setError('Gagal memuat data. Periksa koneksi Anda.');
       console.error(err);
@@ -89,11 +63,49 @@ export const HomeScreen: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // --- Realtime Firestore: setiap perubahan langsung tampil tanpa refresh ---
+  useEffect(
+    () =>
+      subscribeToServices((data) => {
+        setServices(data);
+        setLoading(false);
+      }),
+    []
+  );
+  useEffect(
+    () =>
+      subscribeToBarbers((data) => {
+        setBarbers(data);
+        setLoading(false);
+      }),
+    []
+  );
+  useEffect(() => subscribeToReviews(setReviews), []);
+  useEffect(() => subscribeToBookingsByCustomer(user?.uid, setBookings), [user?.uid]);
+
+  const barberRatings = useMemo(() => {
+    const map: Record<string, { average: number; count: number }> = {};
+    barbers.forEach((barber) => {
+      const items = reviews.filter((r) => r.barberId === barber.id);
+      const total = items.reduce((sum, r) => sum + r.rating, 0);
+      map[barber.id] = {
+        average: items.length ? total / items.length : 0,
+        count: items.length,
+      };
+    });
+    return map;
+  }, [barbers, reviews]);
+
+  useEffect(() => {
+    const pending = bookings.find((b) => b.status === 'Menunggu');
+    setActiveBooking(pending || null);
+  }, [bookings]);
 
   const goToBooking = (initialService?: Service) => {
     if (initialService) {

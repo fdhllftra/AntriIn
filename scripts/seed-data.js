@@ -103,9 +103,9 @@ async function seed() {
   console.log('\nSeed selesai. Data layanan & kapster berhasil ditambahkan.');
   console.log(
     '\nLangkah tambahan:',
-    '\n  1. Buat dokumen users/{UID} dengan field role="admin" (lewat console atau kode)',
-    '\n     untuk UID admin Anda agar mendapat akses Dashboard Admin.',
-    '\n  2. Deploy firestore.rules (lihat README).'
+    '\n  1. Deploy firestore.rules (lihat dev-docs/FIREBASE_DEPLOY.md).',
+    '\n  2. Admin WhatsApp/email cukup login dengan akun terverifikasi; peran berasal',
+    '\n     dari claim Firebase Auth, bukan field role yang ditulis klien.'
   );
 }
 
