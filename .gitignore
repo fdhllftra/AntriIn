@@ -9,12 +9,18 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native & Keystores
 .kotlin/
 *.orig.*
 *.jks
 *.keystore
+release-key.keystore
 credentials.json
+google-services.json
+local.properties
+**/local.properties
+*.properties
+!gradle/wrapper/gradle-wrapper.properties
 *.p8
 *.p12
 *.key
@@ -34,7 +40,9 @@ yarn-error.*
 
 # local env files
 .env
+.env.*
 .env*.local
+!.env.example
 
 # AI rules output folders (per AGENTS.md)
 ../ai-rules/
